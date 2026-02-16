@@ -471,15 +471,21 @@ def print_results(results, near_misses):
             )
             print()
             print(f"  [REF] Near-miss stocks ({len(near_misses)} found):")
-            print(f"  {'Ticker':>8s}  {'Price':>10s}  {'RSI':>6s}  {'Vol':>6s}  Failed (priority-labeled)")
-            print(f"  {'------':>8s}  {'------':>10s}  {'---':>6s}  {'---':>6s}  -------------------------")
+            print(
+                f"  {'Ticker':>8s}  {'Price':>10s}  {'RSI':>6s}  {'Vol':>6s}  "
+                f"{'Failed':40s}  Link"
+            )
+            print(
+                f"  {'------':>8s}  {'------':>10s}  {'---':>6s}  {'---':>6s}  "
+                f"{'------':40s}  ----"
+            )
             for nm in near_misses[:10]:
                 failed = _get_failed_conditions_priority(nm)
                 url = _stock_url(nm["ticker"])
                 print(
-                    f"  {nm['ticker']:>8s}  ${nm['close']:>9.2f}  {nm['rsi']:>5.1f}  {nm['vol_ratio']:>5.1f}x  {failed}"
+                    f"  {nm['ticker']:>8s}  ${nm['close']:>9.2f}  {nm['rsi']:>5.1f}  {nm['vol_ratio']:>5.1f}x  "
+                    f"{failed:40s}  {url}"
                 )
-                print(f"           -> {url}")
 
         # ---- Priority Legend ----
         print()
@@ -500,11 +506,11 @@ def print_results(results, near_misses):
     print("-" * 70)
     print(
         f"  {'#':>2}  {'Ticker':>8s}  {'Price($)':>10s}  {'RSI':>6s}  "
-        f"{'Volume':>7s}  {'WinRate':>8s}  {'E[R]':>7s}"
+        f"{'Volume':>7s}  {'WinRate':>8s}  {'E[R]':>7s}  Link"
     )
     print(
         f"  {'--':>2}  {'------':>8s}  {'--------':>10s}  {'---':>6s}  "
-        f"{'------':>7s}  {'-------':>8s}  {'----':>7s}"
+        f"{'------':>7s}  {'-------':>8s}  {'----':>7s}  ----"
     )
 
     for i, r in enumerate(results, 1):
@@ -514,9 +520,8 @@ def print_results(results, near_misses):
         url = _stock_url(r["ticker"])
         print(
             f"  {i:>2}  {r['ticker']:>8s}  ${r['close']:>9.2f}  {r['rsi']:>5.1f}  "
-            f"{r['vol_ratio']:>5.1f}x  {wr:>7.1f}%  {ev:>+6.2f}%"
+            f"{r['vol_ratio']:>5.1f}x  {wr:>7.1f}%  {ev:>+6.2f}%  {url}"
         )
-        print(f"           -> {url}")
 
     # ---- 종목별 상세 분석 ----
     print()
