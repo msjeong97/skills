@@ -79,12 +79,19 @@ Conditions are listed by **profitability priority** (P1 = most critical):
 
 ## Dependencies
 
-Required Python packages (install if missing):
+Install all packages at once:
 ```bash
-pip install yfinance pandas backtesting
+pip install -r {{SKILL_DIR}}/requirements.txt
 ```
 
-Note: `pandas_ta` is optional - the script has a built-in RSI fallback calculator.
+| Package | Required | Description |
+|---------|----------|-------------|
+| `numpy` | Yes | 수치 연산 |
+| `pandas` | Yes | 데이터프레임 처리 |
+| `yfinance` | Yes | Yahoo Finance 주가 데이터 |
+| `pandas_ta` | Optional | 기술적 지표 계산 (미설치 시 RSI 수동 계산 폴백) |
+| `investgo` | Optional | Investing.com 기술 분석 데이터 |
+| `backtesting` | Optional | 백테스트 엔진 |
 
 ## Configuration
 
