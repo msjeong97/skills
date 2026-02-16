@@ -36,6 +36,13 @@ except ImportError:
         rs = gain / loss
         return 100 - (100 / (1 + rs))
 
+try:
+    from investgo import get_pair_id, get_technical_data
+
+    _HAS_INVESTGO = True
+except ImportError:
+    _HAS_INVESTGO = False
+
 
 # ============================================================
 # Configuration
@@ -49,6 +56,14 @@ RESISTANCE_RANGE = 0.05  # 매물대 체크 범위 (+5%)
 GC_LOOKBACK = 5  # 골든크로스 탐색 기간 (일)
 DOWNLOAD_WORKERS = 8
 INVESTING_URL = "https://kr.investing.com/search/?q={ticker}"
+TECH_SIGNAL_KR = {
+    "Strong Buy": "적극 매수",
+    "Buy": "매수",
+    "Neutral": "중립",
+    "Sell": "매도",
+    "Strong Sell": "적극 매도",
+}
+TECH_SUMMARY_WORKERS = 4
 
 # ============================================================
 # Built-in Ticker Lists
@@ -106,6 +121,52 @@ def get_company_name(ticker):
 def _stock_url(ticker):
     """종목의 kr.investing.com 검색 URL을 반환한다."""
     return INVESTING_URL.format(ticker=ticker)
+
+
+def _strip_ticker_suffix(ticker):
+    """yfinance 접미사(.KS, .KQ 등)를 제거한 순수 티커를 반환한다."""
+    for suffix in (".KS", ".KQ", ".L", ".T", ".HK"):
+        if ticker.endswith(suffix):
+            return ticker[: -len(suffix)]
+    return ticker
+
+
+def get_tech_summary(ticker):
+    """단일 종목의 Investing.com 기술적 분석 요약을 조회한다."""
+    if not _HAS_INVESTGO:
+        return "-"
+    try:
+        search_key = _strip_ticker_suffix(ticker)
+        pair_ids = get_pair_id(search_key)
+        if not pair_ids:
+            return "-"
+        df = get_technical_data(pair_ids[0], tech_type="summary", interval="daily")
+        overall = df[df["type"] == "Overall"]
+        if overall.empty:
+            return "-"
+        signal = overall.iloc[0]["signal"]
+        return TECH_SIGNAL_KR.get(signal, signal)
+    except Exception:
+        return "-"
+
+
+def fetch_tech_summaries(stocks):
+    """종목 리스트에 대해 기술적 분석 요약을 병렬 조회하여 추가한다."""
+    if not stocks:
+        return
+    if not _HAS_INVESTGO:
+        for s in stocks:
+            s["tech_summary"] = "-"
+        return
+
+    print(f"\n  Fetching technical summaries from kr.investing.com...")
+
+    def _fetch_one(stock):
+        stock["tech_summary"] = get_tech_summary(stock["ticker"])
+        return stock
+
+    with ThreadPoolExecutor(max_workers=TECH_SUMMARY_WORKERS) as executor:
+        list(executor.map(_fetch_one, stocks))
 
 
 # ============================================================
@@ -473,18 +534,19 @@ def print_results(results, near_misses):
             print(f"  [REF] Near-miss stocks ({len(near_misses)} found):")
             print(
                 f"  {'Ticker':>8s}  {'Price':>10s}  {'RSI':>6s}  {'Vol':>6s}  "
-                f"{'Failed':40s}  Link"
+                f"{'기술분석':>10s}  {'Failed':40s}  Link"
             )
             print(
                 f"  {'------':>8s}  {'------':>10s}  {'---':>6s}  {'---':>6s}  "
-                f"{'------':40s}  ----"
+                f"{'------':>10s}  {'------':40s}  ----"
             )
             for nm in near_misses[:10]:
                 failed = _get_failed_conditions_priority(nm)
                 url = _stock_url(nm["ticker"])
+                ts = nm.get("tech_summary", "-")
                 print(
                     f"  {nm['ticker']:>8s}  ${nm['close']:>9.2f}  {nm['rsi']:>5.1f}  {nm['vol_ratio']:>5.1f}x  "
-                    f"{failed:40s}  {url}"
+                    f"{ts:>10s}  {failed:40s}  {url}"
                 )
 
         # ---- Priority Legend ----
@@ -506,21 +568,22 @@ def print_results(results, near_misses):
     print("-" * 70)
     print(
         f"  {'#':>2}  {'Ticker':>8s}  {'Price($)':>10s}  {'RSI':>6s}  "
-        f"{'Volume':>7s}  {'WinRate':>8s}  {'E[R]':>7s}  Link"
+        f"{'Volume':>7s}  {'WinRate':>8s}  {'E[R]':>7s}  {'기술분석':>10s}  Link"
     )
     print(
         f"  {'--':>2}  {'------':>8s}  {'--------':>10s}  {'---':>6s}  "
-        f"{'------':>7s}  {'-------':>8s}  {'----':>7s}  ----"
+        f"{'------':>7s}  {'-------':>8s}  {'----':>7s}  {'------':>10s}  ----"
     )
 
     for i, r in enumerate(results, 1):
         bt = r.get("backtest", {})
         wr = bt.get("win_rate", 0)
         ev = bt.get("expected_value", 0)
+        ts = r.get("tech_summary", "-")
         url = _stock_url(r["ticker"])
         print(
             f"  {i:>2}  {r['ticker']:>8s}  ${r['close']:>9.2f}  {r['rsi']:>5.1f}  "
-            f"{r['vol_ratio']:>5.1f}x  {wr:>7.1f}%  {ev:>+6.2f}%  {url}"
+            f"{r['vol_ratio']:>5.1f}x  {wr:>7.1f}%  {ev:>+6.2f}%  {ts:>10s}  {url}"
         )
 
     # ---- 종목별 상세 분석 ----
@@ -542,6 +605,9 @@ def print_results(results, near_misses):
         print(f"     {url}")
         print("-" * 70)
         print(f"  Price: ${r['close']:.2f}  |  MA5: ${r['ma5']:.2f}  |  MA20: ${r['ma20']:.2f}")
+        ts = r.get("tech_summary", "-")
+        if ts != "-":
+            print(f"  [INVESTING.COM] 기술적 분석 요약: {ts}")
 
         # 매수 사유 (우선순위별 정렬)
         print()
@@ -643,7 +709,8 @@ def print_results(results, near_misses):
         for nm in near_misses[:10]:
             failed = _get_failed_conditions_priority(nm)
             url = _stock_url(nm["ticker"])
-            print(f"    {nm['ticker']:>8s}  ${nm['close']:>9.2f}  RSI {nm['rsi']:>5.1f}  {nm['vol_ratio']:>5.1f}x  | {failed}")
+            ts = nm.get("tech_summary", "-")
+            print(f"    {nm['ticker']:>8s}  ${nm['close']:>9.2f}  RSI {nm['rsi']:>5.1f}  {nm['vol_ratio']:>5.1f}x  {ts:>10s}  | {failed}")
             print(f"              {url}")
 
     # ---- Priority Legend ----
@@ -783,6 +850,10 @@ def main():
             # 종목명 조회
             r["name"] = get_company_name(r["ticker"])
             del r["df"]  # 메모리 해제
+
+    # Investing.com 기술적 분석 요약 조회
+    fetch_tech_summaries(results)
+    fetch_tech_summaries(near_misses)
 
     # Phase 3: Output
     print_results(results, near_misses)
