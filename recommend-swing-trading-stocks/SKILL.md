@@ -45,13 +45,17 @@ The scanner outputs three sections. Explain each to the user in Korean:
    - Ticker, price, RSI, volume ratio, backtest win rate, expected return
 
 2. **Phase 2 - Detailed Analysis**: Per-stock breakdown
-   - Buy signal rationale (which conditions met)
+   - Buy signal rationale with priority labels ([P1]~[P4])
    - Trade plan (target price +10%, stop loss -5%, R:R ratio)
    - Backtest results (1Y historical performance)
-   - Risk warnings
+   - Conviction score (10-point weighted: P1=4, P2=3, P3=2, P4=1)
+   - Risk warnings with priority context
+   - kr.investing.com link (clickable in terminal)
 
 3. **Near-miss Reference**: Stocks meeting 3-4 out of 5 conditions
-   - Shows which condition(s) failed
+   - Shows which condition(s) failed with priority labels
+   - Highlights critical failures: "엔진 미점화" (P1), "매물대 존재" (P2)
+   - kr.investing.com link per stock
 
 ### Step 3: Provide Context
 
