@@ -89,17 +89,34 @@ File template:
 [Any additional context needed for the next session]
 ```
 
-#### 3-3. Post-archive guidance
+#### 3-3. Ask user to clear and reload
 
-After saving the file, present the user with:
+After saving the file, report:
 
 ```
 Archive saved: ./ctx_[topic]_[YYYYMMDD].md
-
-To continue in a fresh session:
-1. Run /clear to reset context
-2. In the new session, ask Claude to read the archive file:
-   "Read ./ctx_[topic]_[YYYYMMDD].md and continue from where we left off"
 ```
 
-Ask the user if they want to proceed with `/clear` now.
+Then use the **AskUserQuestion** tool to ask the user:
+
+- **Question**: "아카이브가 저장되었습니다. 세션을 클리어하고 아카이브에서 컨텍스트를 다시 로드할까요?"
+- **Option 1**: "Yes, clear and reload" — `/clear` 실행 후 아카이브 파일을 읽어서 컨텍스트 복원
+- **Option 2**: "No, keep session" — 현재 세션 유지
+
+### Step 4: Handle User Response
+
+**If the user selects "Yes, clear and reload":**
+
+Note the archive file path (e.g., `./ctx_auth-refactor_20260216.md`), then display the following message:
+
+```
+✅ 아카이브 완료: ./ctx_[topic]_[YYYYMMDD].md
+
+아래 단계를 따라주세요:
+1. /clear 를 입력해서 세션을 초기화하세요
+2. 새 세션에서 아래 명령어를 붙여넣으세요:
+
+./ctx_[topic]_[YYYYMMDD].md 파일을 읽고 이전 작업을 이어서 진행해줘
+```
+
+**If the user selects "No, keep session":** 아무 추가 동작 없이 종료.

@@ -12,7 +12,7 @@ Claude Code custom skills 모음.
 - 기능:
   - 컨텍스트 사용량 퍼센트 보고
   - 80% 이상 시 `ctx_[주제]_[YYYYMMDD].md` 아카이브 파일 자동 생성
-  - `/clear` 후 새 세션에서 아카이브 파일로 작업 재개 안내
+  - "Yes, clear and reload" 선택 시 `/clear` + 아카이브 파일 로드 안내 (복붙 명령어 제공)
 
 ### recommend-swing-trading-stocks
 
