@@ -48,6 +48,7 @@ RSI_HIGH = 60
 RESISTANCE_RANGE = 0.05  # 매물대 체크 범위 (+5%)
 GC_LOOKBACK = 5  # 골든크로스 탐색 기간 (일)
 DOWNLOAD_WORKERS = 8
+INVESTING_URL = "https://kr.investing.com/search/?q={ticker}"
 
 # ============================================================
 # Built-in Ticker Lists
@@ -100,6 +101,26 @@ def get_company_name(ticker):
         return info.get("shortName", info.get("longName", ticker))
     except Exception:
         return ticker
+
+
+def _link(url, label):
+    """OSC 8 터미널 하이퍼링크. 지원 터미널에서 클릭 가능한 텍스트를 생성한다.
+
+    지원: iTerm2, macOS Terminal(Sequoia+), VS Code Terminal, Windows Terminal 등.
+    미지원 터미널에서는 label만 표시됨.
+    """
+    return f"\033]8;;{url}\033\\{label}\033]8;;\033\\"
+
+
+def _stock_url(ticker):
+    """종목의 kr.investing.com 검색 URL을 반환한다."""
+    return INVESTING_URL.format(ticker=ticker)
+
+
+def _stock_link(ticker, label=None):
+    """종목의 클릭 가능한 링크를 생성한다."""
+    url = _stock_url(ticker)
+    return _link(url, label or f"[{ticker} 차트]")
 
 
 # ============================================================
@@ -469,9 +490,11 @@ def print_results(results, near_misses):
             print(f"  {'------':>8s}  {'------':>10s}  {'---':>6s}  {'---':>6s}  -------------------------")
             for nm in near_misses[:10]:
                 failed = _get_failed_conditions_priority(nm)
+                url = _stock_url(nm["ticker"])
                 print(
                     f"  {nm['ticker']:>8s}  ${nm['close']:>9.2f}  {nm['rsi']:>5.1f}  {nm['vol_ratio']:>5.1f}x  {failed}"
                 )
+                print(f"            {url}")
 
         # ---- Priority Legend ----
         print()
@@ -503,10 +526,12 @@ def print_results(results, near_misses):
         bt = r.get("backtest", {})
         wr = bt.get("win_rate", 0)
         ev = bt.get("expected_value", 0)
+        url = _stock_url(r["ticker"])
         print(
             f"  {i:>2}  {r['ticker']:>8s}  ${r['close']:>9.2f}  {r['rsi']:>5.1f}  "
             f"{r['vol_ratio']:>5.1f}x  {wr:>7.1f}%  {ev:>+6.2f}%"
         )
+        print(f"            {url}")
 
     # ---- 종목별 상세 분석 ----
     print()
@@ -520,9 +545,12 @@ def print_results(results, near_misses):
         sl_price = r["close"] * (1 - SL_PCT)
         name = r.get("name", r["ticker"])
 
+        link = _stock_link(r["ticker"], f">> {r['ticker']} 차트 열기 <<")
+        url = _stock_url(r["ticker"])
         print()
         print("-" * 70)
-        print(f"  {i}. {r['ticker']} ({name})")
+        print(f"  {i}. {r['ticker']} ({name})  {link}")
+        print(f"  {url}")
         print("-" * 70)
         print(f"  Price: ${r['close']:.2f}  |  MA5: ${r['ma5']:.2f}  |  MA20: ${r['ma20']:.2f}")
 
@@ -625,7 +653,9 @@ def print_results(results, near_misses):
         print("-" * 70)
         for nm in near_misses[:10]:
             failed = _get_failed_conditions_priority(nm)
+            url = _stock_url(nm["ticker"])
             print(f"    {nm['ticker']:>8s}  ${nm['close']:>9.2f}  RSI {nm['rsi']:>5.1f}  {nm['vol_ratio']:>5.1f}x  | {failed}")
+            print(f"              {url}")
 
     # ---- Priority Legend ----
     print()
