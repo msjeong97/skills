@@ -304,6 +304,7 @@ def find_rbi_stocks(tickers):
             if result["passed"]:
                 results.append(result)
             elif result["score"] >= 3:
+                result["trade_prices"] = calc_trade_prices(result, result["df"])
                 del result["df"]
                 near_misses.append(result)
             else:
@@ -488,6 +489,138 @@ def run_backtest(df):
 
 
 # ============================================================
+# Dynamic Trade Price Calculator
+# ============================================================
+def calc_trade_prices(stock, df):
+    """기술적 분석 기반 동적 매매가격을 산출한다.
+
+    Returns:
+        dict: ideal_entry, max_entry, entry_reason, stop_loss, sl_pct,
+              sl_reason, target, tp_pct, tp_reason, rr_ratio, atr, swing_low_10d
+    """
+    close = float(df["Close"].iloc[-1])
+    ma5 = float(df["MA5"].iloc[-1]) if "MA5" in df.columns else float(df["Close"].rolling(5).mean().iloc[-1])
+    ma20 = float(df["MA20"].iloc[-1]) if "MA20" in df.columns else float(df["Close"].rolling(20).mean().iloc[-1])
+
+    # ATR(14)
+    high = df["High"]
+    low = df["Low"]
+    prev_close = df["Close"].shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    atr = float(tr.rolling(14).mean().iloc[-1])
+
+    # ---- 1. 구매추천가 (Ideal Entry Price) ----
+    if ma5 < close * 0.99:
+        ideal_entry = round(ma5, 2)
+        entry_reason = "MA5 눌림목 매수 (지정가)"
+    else:
+        ideal_entry = round(close, 2)
+        entry_reason = "MA5 근접, 현재가 진입 OK"
+    max_entry = round(close * 1.01, 2)
+
+    # ---- 2. 손절가 (Stop Loss) ----
+    # 10일 스윙로우
+    swing_low_10d = float(df["Low"].tail(10).min())
+    sl_swing = swing_low_10d * 0.995
+
+    # MA20 이탈
+    sl_ma20 = ma20 * 0.99
+
+    # ATR 기반
+    sl_atr = ideal_entry - 2 * atr
+
+    # 가장 보수적(높은 값) 채택
+    sl_candidates = [
+        (sl_swing, f"10일 스윙로우(${swing_low_10d:.2f}) 하단 이탈 기준"),
+        (sl_ma20, f"MA20(${ma20:.2f}) -1% 이탈 기준"),
+        (sl_atr, f"ATR(${atr:.2f}) x2 변동성 기반"),
+    ]
+    sl_candidates.sort(key=lambda x: x[0], reverse=True)
+    raw_sl = sl_candidates[0][0]
+    sl_reason = sl_candidates[0][1]
+
+    # 클램핑: 진입가 대비 -3% ~ -8%
+    sl_floor = ideal_entry * 0.92  # -8%
+    sl_ceil = ideal_entry * 0.97   # -3%
+    if raw_sl > sl_ceil:
+        stop_loss = round(sl_ceil, 2)
+        sl_reason += " -> 최소 -3% 적용"
+    elif raw_sl < sl_floor:
+        stop_loss = round(sl_floor, 2)
+        sl_reason += " -> 최대 -8% 제한"
+    else:
+        stop_loss = round(raw_sl, 2)
+
+    sl_pct = round((stop_loss / ideal_entry - 1) * 100, 1)
+
+    # ---- 3. 목표매도가 (Target / Take Profit) ----
+    # 3개월 고점
+    three_month_high = float(df["High"].tail(63).max())
+    if three_month_high <= close:
+        # 이미 돌파 -> 6개월 고점 또는 +15%
+        six_month_high = float(df["High"].tail(126).max())
+        if six_month_high > close:
+            tp_resist = six_month_high
+        else:
+            tp_resist = ideal_entry * 1.15
+    else:
+        tp_resist = three_month_high
+
+    # ATR 기반
+    tp_atr = ideal_entry + 3 * atr
+
+    # 피보나치 확장: 20일 스윙저점 + (스윙고-스윙저) * 1.618
+    swing_low_20d = float(df["Low"].tail(20).min())
+    swing_high_20d = float(df["High"].tail(20).max())
+    tp_fib = swing_low_20d + (swing_high_20d - swing_low_20d) * 1.618
+
+    tp_candidates = [
+        (tp_resist, "저항선 기반"),
+        (tp_atr, "ATR x3 변동성 목표"),
+        (tp_fib, "피보나치 1.618 확장"),
+    ]
+
+    # +8% 이상인 후보 중 가장 낮은 값
+    min_target_pct = 1.08
+    valid_targets = [(p, r) for p, r in tp_candidates if p >= ideal_entry * min_target_pct]
+
+    if valid_targets:
+        valid_targets.sort(key=lambda x: x[0])
+        target = round(valid_targets[0][0], 2)
+        tp_reason = valid_targets[0][1]
+    else:
+        # 후보 모두 +8% 미만 -> 기본 +10%
+        target = round(ideal_entry * 1.10, 2)
+        tp_reason = "기본 +10% 적용 (R:R 보장)"
+
+    tp_pct = round((target / ideal_entry - 1) * 100, 1)
+
+    # ---- R:R Ratio ----
+    risk = abs(ideal_entry - stop_loss)
+    reward = abs(target - ideal_entry)
+    rr_ratio = round(reward / risk, 1) if risk > 0 else 0.0
+
+    return {
+        "ideal_entry": ideal_entry,
+        "max_entry": max_entry,
+        "entry_reason": entry_reason,
+        "stop_loss": stop_loss,
+        "sl_pct": sl_pct,
+        "sl_reason": sl_reason,
+        "target": target,
+        "tp_pct": tp_pct,
+        "tp_reason": tp_reason,
+        "rr_ratio": rr_ratio,
+        "atr": round(atr, 2),
+        "swing_low_10d": round(swing_low_10d, 2),
+    }
+
+
+# ============================================================
 # Phase 3: Output Formatter
 # ============================================================
 def print_header():
@@ -533,21 +666,31 @@ def print_results(results, near_misses):
             print()
             print(f"  [REF] Near-miss stocks ({len(near_misses)} found):")
             print(
-                f"  {'Ticker':>8s}  {'Price':>10s}  {'RSI':>6s}  {'Vol':>6s}  "
-                f"{'기술분석':>10s}  {'Failed':40s}  Link"
+                f"  {'Ticker':>8s}  {'Price($)':>10s}  {'Entry($)':>10s}  "
+                f"{'SL($)':>9s}  {'Target($)':>10s}  {'R:R':>6s}  "
+                f"{'RSI':>6s}  {'Vol':>6s}  {'기술분석':>10s}  Failed"
             )
             print(
-                f"  {'------':>8s}  {'------':>10s}  {'---':>6s}  {'---':>6s}  "
-                f"{'------':>10s}  {'------':40s}  ----"
+                f"  {'------':>8s}  {'--------':>10s}  {'--------':>10s}  "
+                f"{'-----':>9s}  {'---------':>10s}  {'---':>6s}  "
+                f"{'---':>6s}  {'---':>6s}  {'------':>10s}  ------"
             )
             for nm in near_misses[:10]:
                 failed = _get_failed_conditions_priority(nm)
                 url = _stock_url(nm["ticker"])
                 ts = nm.get("tech_summary", "-")
+                tp = nm.get("trade_prices", {})
+                entry = tp.get("ideal_entry", nm["close"])
+                sl = tp.get("stop_loss", nm["close"] * 0.95)
+                tgt = tp.get("target", nm["close"] * 1.10)
+                rr = tp.get("rr_ratio", 0)
                 print(
-                    f"  {nm['ticker']:>8s}  ${nm['close']:>9.2f}  {nm['rsi']:>5.1f}  {nm['vol_ratio']:>5.1f}x  "
-                    f"{ts:>10s}  {failed:40s}  {url}"
+                    f"  {nm['ticker']:>8s}  ${nm['close']:>9.2f}  ${entry:>9.2f}  "
+                    f"${sl:>8.2f}  ${tgt:>9.2f}  {f'1:{rr:.1f}':>6s}  "
+                    f"{nm['rsi']:>5.1f}  {nm['vol_ratio']:>5.1f}x  "
+                    f"{ts:>10s}  {failed}"
                 )
+                print(f"  {'':8s}  {'':10s}  {'':10s}  {'':9s}  {'':10s}  {'':6s}  {'':6s}  {'':6s}  {'':10s}  {url}")
 
         # ---- Priority Legend ----
         print()
@@ -567,23 +710,31 @@ def print_results(results, near_misses):
     print("  [Phase 1] Research : RBI Filter Results")
     print("-" * 70)
     print(
-        f"  {'#':>2}  {'Ticker':>8s}  {'Price($)':>10s}  {'RSI':>6s}  "
-        f"{'Volume':>7s}  {'WinRate':>8s}  {'E[R]':>7s}  {'기술분석':>10s}  Link"
+        f"  {'#':>2}  {'Ticker':>8s}  {'Price($)':>10s}  {'Entry($)':>10s}  "
+        f"{'SL($)':>9s}  {'Target($)':>10s}  {'R:R':>6s}  "
+        f"{'WinRate':>8s}  {'E[R]':>7s}  {'기술분석':>10s}  Link"
     )
     print(
-        f"  {'--':>2}  {'------':>8s}  {'--------':>10s}  {'---':>6s}  "
-        f"{'------':>7s}  {'-------':>8s}  {'----':>7s}  {'------':>10s}  ----"
+        f"  {'--':>2}  {'------':>8s}  {'--------':>10s}  {'--------':>10s}  "
+        f"{'-----':>9s}  {'---------':>10s}  {'---':>6s}  "
+        f"{'-------':>8s}  {'----':>7s}  {'------':>10s}  ----"
     )
 
     for i, r in enumerate(results, 1):
         bt = r.get("backtest", {})
+        tp = r.get("trade_prices", {})
         wr = bt.get("win_rate", 0)
         ev = bt.get("expected_value", 0)
         ts = r.get("tech_summary", "-")
         url = _stock_url(r["ticker"])
+        entry = tp.get("ideal_entry", r["close"])
+        sl = tp.get("stop_loss", r["close"] * 0.95)
+        tgt = tp.get("target", r["close"] * 1.10)
+        rr = tp.get("rr_ratio", 0)
         print(
-            f"  {i:>2}  {r['ticker']:>8s}  ${r['close']:>9.2f}  {r['rsi']:>5.1f}  "
-            f"{r['vol_ratio']:>5.1f}x  {wr:>7.1f}%  {ev:>+6.2f}%  {ts:>10s}  {url}"
+            f"  {i:>2}  {r['ticker']:>8s}  ${r['close']:>9.2f}  ${entry:>9.2f}  "
+            f"${sl:>8.2f}  ${tgt:>9.2f}  {f'1:{rr:.1f}':>6s}  "
+            f"{wr:>7.1f}%  {ev:>+6.2f}%  {ts:>10s}  {url}"
         )
 
     # ---- 종목별 상세 분석 ----
@@ -594,8 +745,7 @@ def print_results(results, near_misses):
 
     for i, r in enumerate(results, 1):
         bt = r.get("backtest", {})
-        tp_price = r["close"] * (1 + TP_PCT)
-        sl_price = r["close"] * (1 - SL_PCT)
+        tp = r.get("trade_prices", {})
         name = r.get("name", r["ticker"])
 
         url = _stock_url(r["ticker"])
@@ -647,9 +797,20 @@ def print_results(results, near_misses):
         # 매매 계획
         print()
         print("  [TRADE PLAN / 매매 계획]")
-        print(f"    Target(TP) : ${tp_price:.2f}  (+{TP_PCT*100:.0f}%)")
-        print(f"    Stop  (SL) : ${sl_price:.2f}  (-{SL_PCT*100:.0f}%)")
-        print(f"    R:R Ratio  : 1 : {TP_PCT/SL_PCT:.1f}")
+        if tp:
+            print(f"    구매추천가 : ${tp['ideal_entry']:.2f}  ({tp['entry_reason']})")
+            print(f"    최대진입가 : ${tp['max_entry']:.2f}  (이 가격 초과 시 추격매수 금지)")
+            print(f"    손절가     : ${tp['stop_loss']:.2f}  ({tp['sl_pct']:+.1f}%)  ({tp['sl_reason']})")
+            print(f"    목표매도가 : ${tp['target']:.2f}  (+{tp['tp_pct']:.1f}%)  ({tp['tp_reason']})")
+            print(f"    R:R Ratio  : 1 : {tp['rr_ratio']:.1f}")
+            if tp.get('atr'):
+                print(f"    ATR(14)    : ${tp['atr']:.2f}  |  10D Swing Low: ${tp['swing_low_10d']:.2f}")
+        else:
+            tp_price = r["close"] * (1 + TP_PCT)
+            sl_price = r["close"] * (1 - SL_PCT)
+            print(f"    Target(TP) : ${tp_price:.2f}  (+{TP_PCT*100:.0f}%)")
+            print(f"    Stop  (SL) : ${sl_price:.2f}  (-{SL_PCT*100:.0f}%)")
+            print(f"    R:R Ratio  : 1 : {TP_PCT/SL_PCT:.1f}")
 
         # 백테스트 결과
         print()
@@ -679,7 +840,8 @@ def print_results(results, near_misses):
         print()
         print("  [RISK / 주의사항]")
         print("    - 기술적 분석 참고 자료이며 투자 권유가 아닙니다")
-        print(f"    - 손절가 ${sl_price:.2f} 하회 시 즉시 청산 권장")
+        sl_display = tp.get("stop_loss", r["close"] * (1 - SL_PCT))
+        print(f"    - 손절가 ${sl_display:.2f} 하회 시 즉시 청산 권장")
         print("    - 실적 발표, 금리 결정 등 거시경제 이벤트 일정 확인 필요")
         if r["vol_ratio"] < 2.5:
             print(f"    - [P1] 거래량({r['vol_ratio']:.1f}x)이 기준 근처. 추가 거래량 확인 후 진입 고려")
@@ -710,7 +872,16 @@ def print_results(results, near_misses):
             failed = _get_failed_conditions_priority(nm)
             url = _stock_url(nm["ticker"])
             ts = nm.get("tech_summary", "-")
-            print(f"    {nm['ticker']:>8s}  ${nm['close']:>9.2f}  RSI {nm['rsi']:>5.1f}  {nm['vol_ratio']:>5.1f}x  {ts:>10s}  | {failed}")
+            tp = nm.get("trade_prices", {})
+            entry = tp.get("ideal_entry", nm["close"])
+            sl = tp.get("stop_loss", nm["close"] * 0.95)
+            tgt = tp.get("target", nm["close"] * 1.10)
+            rr = tp.get("rr_ratio", 0)
+            print(
+                f"    {nm['ticker']:>8s}  ${nm['close']:>9.2f}  "
+                f"Entry ${entry:.2f}  SL ${sl:.2f}  Target ${tgt:.2f}  R:R 1:{rr:.1f}  "
+                f"RSI {nm['rsi']:.1f}  {nm['vol_ratio']:.1f}x  {ts}  | {failed}"
+            )
             print(f"              {url}")
 
     # ---- Priority Legend ----
@@ -847,6 +1018,7 @@ def main():
         print(f"\n  Running backtests on {len(results)} qualified stocks...")
         for r in results:
             r["backtest"] = run_backtest(r["df"])
+            r["trade_prices"] = calc_trade_prices(r, r["df"])
             # 종목명 조회
             r["name"] = get_company_name(r["ticker"])
             del r["df"]  # 메모리 해제
