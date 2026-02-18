@@ -36,14 +36,17 @@ Report the estimated usage to the user in this format:
 - Status: OK / MODERATE / HIGH
 ```
 
-### Step 2: Decide Next Action
+### Step 2: Ask User Whether to Archive
 
-- **Below 80%**: Report usage and stop. No further action needed.
-- **80% or above**: Inform the user that context is running high, then proceed to Step 3.
+After reporting usage, use the **AskUserQuestion** tool to ask the user:
+
+- **Question**: "현재 세션 컨텍스트를 아카이브 파일로 저장할까요?"
+- **Option 1**: "Yes, archive" — Step 3으로 진행
+- **Option 2**: "No, keep session" — 현재 세션 유지하고 종료
 
 ### Step 3: Auto-Archive Session Context
 
-When usage is 80% or above, create an archive file summarizing the current session.
+When the user selects "Yes, archive", create an archive file summarizing the current session.
 
 #### 3-1. Analyze the current project and session
 
@@ -89,34 +92,43 @@ File template:
 [Any additional context needed for the next session]
 ```
 
-#### 3-3. Ask user to clear and reload
+#### 3-3. Report archive saved
 
 After saving the file, report:
 
 ```
-Archive saved: ./ctx_[topic]_[YYYYMMDD].md
+✅ 아카이브 저장 완료: ./ctx_[topic]_[YYYYMMDD].md
 ```
 
-Then use the **AskUserQuestion** tool to ask the user:
+### Step 4: Ask User Whether to Clear & Reload
 
-- **Question**: "아카이브가 저장되었습니다. 세션을 클리어하고 아카이브에서 컨텍스트를 다시 로드할까요?"
-- **Option 1**: "Yes, clear and reload" — `/clear` 실행 후 아카이브 파일을 읽어서 컨텍스트 복원
-- **Option 2**: "No, keep session" — 현재 세션 유지
+After the archive is saved, use the **AskUserQuestion** tool to ask the user:
 
-### Step 4: Handle User Response
+- **Question**: "아카이브가 완료됐어요. 지금 세션을 클리어하고 새 세션에서 이어서 시작할까요?"
+- **Option 1**: "Yes, clear & reload" — Step 5로 진행
+- **Option 2**: "No, continue working" — 아무 추가 동작 없이 종료
 
-**If the user selects "Yes, clear and reload":**
+### Step 5: Auto-Copy & Guide Clear & Reload
 
-Note the archive file path (e.g., `./ctx_auth-refactor_20260216.md`), then display the following message:
+**If the user selected "Yes, clear & reload" in Step 4:**
 
-```
-✅ 아카이브 완료: ./ctx_[topic]_[YYYYMMDD].md
+Run the following bash command to copy the reload message to the clipboard automatically:
 
-아래 단계를 따라주세요:
-1. /clear 를 입력해서 세션을 초기화하세요
-2. 새 세션에서 아래 명령어를 붙여넣으세요:
-
-./ctx_[topic]_[YYYYMMDD].md 파일을 읽고 이전 작업을 이어서 진행해줘
+```bash
+echo "./ctx_[topic]_[YYYYMMDD].md 파일을 읽고 이전 작업을 이어서 진행해줘" | pbcopy
 ```
 
-**If the user selects "No, keep session":** 아무 추가 동작 없이 종료.
+Then display this message:
+
+```
+📋 클립보드에 복사됐어요.
+
+이제 아래 순서로 진행하세요:
+
+① 지금 바로 입력하세요:
+   /clear
+
+② 새 세션이 시작되면 Cmd+V 로 붙여넣으세요.
+```
+
+**If the user selected "No, continue working" in Step 4:** 아무 추가 동작 없이 종료.
