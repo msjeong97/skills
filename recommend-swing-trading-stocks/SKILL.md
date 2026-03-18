@@ -18,6 +18,18 @@ This skill is invoked via `/recommend-swing-trading-stocks`.
 
 ## Workflow
 
+### Step 0: Ask for Budget
+
+Before running the scanner, ask the user:
+
+> "총 투자 가능 예산이 얼마인가요? (예: $10,000 또는 1,000만원)"
+
+- Wait for the user's answer before proceeding.
+- Record the amount and currency unit as provided.
+- If the user inputs KRW (원), note that the scanner returns USD prices. Ask:
+  > "스캐너는 USD 기준 가격을 반환합니다. USD 환산 금액으로 입력해주시겠어요? 또는 현재 환율을 알려주시면 제가 환산합니다."
+- Proceed to Step 1 only after the budget is confirmed.
+
 ### Step 1: Run the Scanner
 
 Execute the RBI scanner script. The user may optionally provide specific tickers.
@@ -57,7 +69,41 @@ The scanner outputs three sections. Explain each to the user in Korean:
    - Highlights critical failures: "엔진 미점화" (P1), "매물대 존재" (P2)
    - kr.investing.com link per stock
 
-### Step 3: Provide Context
+### Step 3: Position Sizing
+
+Using the budget from Step 0 and the Conviction scores from Step 2, select the top stocks and calculate position sizes.
+
+**Stock selection:**
+- ≥ 3 passing stocks → pick top 3 by Conviction score → allocate 50% / 30% / 20%
+- 2 passing stocks → pick both → allocate 50% / 50%
+- 1 passing stock → allocate 100%
+- 0 passing stocks → print "오늘은 진입 기회 없음 — 포지션 계산을 건너뜁니다." and skip to Step 4. (Near-miss 목록은 Step 2에서 이미 출력되므로 별도 처리 불필요)
+
+**Tie-breaking:** If two stocks share the same Conviction score, rank by R:R Ratio (higher = better).
+
+**Budget too small:** If the allocated amount for a stock is less than 1 share at `ideal_entry`, warn:
+> "예산이 {TICKER} 1주 매수가({ideal_entry})보다 적습니다. 해당 종목은 건너뜁니다."
+
+Do not redistribute the freed allocation to the remaining stocks. Simply omit that stock from the output. After presenting the position sizing results, add a note: "나머지 {skipped_pct}%는 미배분 상태입니다. 별도 판단으로 활용하거나 관망하세요."
+
+**Per-stock output format:**
+
+```
+📌 {TICKER} — Conviction {score}/10
+   배분 금액:   {allocated_amount} ({pct}%)
+   매수 추천가: {ideal_entry}  →  약 {shares}주
+   최대 진입가: {max_entry}
+   손절가:     {stop_loss} ({sl_pct}%)
+   목표 매도가: {target} ({tp_pct}%)
+   R:R Ratio:  1 : {rr}
+```
+
+- `shares` = floor(allocated_amount ÷ ideal_entry)
+- All prices (`ideal_entry`, `max_entry`, `stop_loss`, `target`) come from the scanner's `trade_prices` output.
+- `sl_pct` and `tp_pct` are the percentage distances from `ideal_entry` to `stop_loss` and `target` respectively — use the values from `trade_prices`.
+- Use the same currency unit the user provided in Step 0.
+
+### Step 4: Provide Context
 
 After presenting results, add:
 
