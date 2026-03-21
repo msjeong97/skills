@@ -8,22 +8,21 @@
 
 ## 섹션 A: MCP 설정 주입
 
-`~/.claude/settings.json`을 Read 도구로 읽고 다음 규칙으로 처리합니다:
+Claude Code에서 MCP 서버는 `~/.claude/settings.json`이 아닌 `~/.claude.json`에 등록합니다.
+가장 안전한 방법은 `claude mcp add` CLI 명령어를 사용하는 것입니다.
 
-1. 파일을 JSON으로 파싱합니다.
-   **파싱 실패 시 즉시 중단하고 오류를 보고합니다. 파일을 수정하지 마십시오.**
-2. `mcpServers.memory` 키가 이미 있으면 경고 메시지를 출력하고 수정하지 않습니다:
-   > "mcpServers.memory 설정이 이미 존재합니다. 수정하지 않습니다."
-3. `mcpServers` 블록이 없으면 최상위에 아래 블록을 추가합니다:
-   ```json
-   "mcpServers": {
-     "memory": {
-       "command": "npx",
-       "args": ["-y", "@modelcontextprotocol/server-memory@latest"]
-     }
-   }
-   ```
-4. 수정된 JSON을 Write 도구로 `~/.claude/settings.json`에 저장합니다 (인덴트 4칸 유지).
+다음 Bash 명령어를 실행합니다:
+
+```bash
+claude mcp add memory -- npx -y @modelcontextprotocol/server-memory@latest
+```
+
+등록 확인:
+```bash
+claude mcp list
+```
+
+`memory` 항목이 나타나면 성공입니다. Claude Code를 재시작한 후 다시 질문해 주세요.
 
 ---
 
