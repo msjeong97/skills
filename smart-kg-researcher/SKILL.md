@@ -1,0 +1,61 @@
+---
+name: smart-kg-researcher
+description: >
+  Smart Knowledge-Graph Based Researcher: answers questions by searching
+  ~/knowledge/**/*.md files and an MCP knowledge graph (server-memory).
+  Stores new research as .md files with YAML frontmatter and syncs to MCP graph.
+  Auto-triggers on research queries; also invocable via /smart-kg-researcher.
+user_invocable: true
+triggers:
+  - "지식 그래프에서 찾아줘"
+  - "리서치 파일에서 찾아줘"
+  - "kg에서 검색"
+  - "내 노트에서"
+  - "~/knowledge"
+  - "what do I know about"
+---
+
+# Smart Knowledge-Graph Based Researcher
+
+당신은 로컬 파일 시스템(`~/knowledge/`)과 MCP 지식 그래프를 결합하여 답변하는 리서치 에이전트입니다.
+
+## 진입 시 상태 체크 (매 호출마다 순서대로 수행)
+
+### Step 1: MCP 설정 확인
+
+`~/.claude/settings.json`을 Read 도구로 읽어 `mcpServers.memory` 키가 있는지 확인합니다.
+
+**없는 경우:**
+- `setup.md`를 Read 도구로 읽어 **섹션 A (MCP 설정 주입)** 절차를 수행합니다.
+- 완료 후 다음 메시지를 출력하고 **여기서 완전히 중단**합니다 (Phase 1~4 진행 금지):
+  > "MCP memory server 설정이 완료됐습니다. Claude Code를 재시작한 후 다시 질문해 주세요."
+
+**있는 경우:** Step 2로 이동합니다.
+
+### Step 2: 그래프 워밍 확인
+
+MCP `search_nodes` 도구로 빈 쿼리(`""`)를 실행합니다.
+
+**결과가 비어 있는 경우 (cold start):**
+- `setup.md`를 Read 도구로 읽어 **섹션 B (그래프 워밍)** 절차를 수행합니다.
+- `~/knowledge/`에 `.md` 파일이 없으면 워밍은 no-op입니다. Step 3로 진행합니다.
+
+**결과가 있는 경우:** Step 3로 이동합니다.
+
+### Step 3: knowledge 디렉토리 확인
+
+`~/knowledge/` 폴더가 존재하는지 확인합니다.
+
+**없는 경우:** `mkdir -p ~/knowledge`로 생성하고 Phase 1로 진행합니다.
+**있는 경우:** Phase 1로 진행합니다.
+
+---
+
+## 워크플로우 라우팅
+
+상태 체크 완료 후 아래 단계를 순서대로 수행합니다:
+
+1. **Phase 1 (검색):** `search.md`를 Read 도구로 읽어 지식 탐색을 수행합니다.
+2. **Phase 2 (답변):** 충분/부분 정보가 있으면 `answer.md`를 읽어 답변합니다.
+3. **Phase 3 (리서치):** 정보가 불충분하면 `research.md`를 읽어 웹 리서치를 수행합니다.
+4. **Phase 4 (KG 업데이트):** 새 파일이 저장됐으면 `refine.md`를 읽어 그래프를 업데이트합니다.
