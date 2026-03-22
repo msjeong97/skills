@@ -619,6 +619,30 @@ def output_results(top20: list):
     print(json.dumps(json_data, ensure_ascii=False, indent=2))
 
 
+# ── 결과 저장 ────────────────────────────────────────────────────────────────
+
+def save_top20_json(top20: list, skill_dir: str):
+    """Top 20 정량 데이터를 날짜별 JSON으로 저장 (AI 웹서치 단계 및 백테스팅용)."""
+    import os
+    results_dir = os.path.join(skill_dir, "results")
+    os.makedirs(results_dir, exist_ok=True)
+
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    filepath = os.path.join(results_dir, f"{date_str}-top20-raw.json")
+
+    payload = {
+        "scan_date": datetime.now().strftime('%Y-%m-%d %H:%M'),
+        "universe_size": len(TOP_150_TICKERS),
+        "top20": top20,
+    }
+
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    print(f"\n  💾 Top 20 저장됨: {filepath}")
+    return filepath
+
+
 # ── 메인 ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -654,6 +678,11 @@ def main():
     # 5. 상위 20개 추출 후 출력
     top20 = sorted(scored, key=lambda x: x['undervalue_score'], reverse=True)[:20]
     output_results(top20)
+
+    # 6. Top 20 JSON 파일 저장
+    import os
+    skill_dir = os.path.dirname(os.path.abspath(__file__))
+    save_top20_json(top20, skill_dir)
 
     print(f"\n{'='*65}")
     print(f"  ✅ 스캔 완료. 위 JSON을 AI에게 전달해 상승 신호 점수를 받으세요.")
