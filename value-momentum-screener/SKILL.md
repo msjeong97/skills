@@ -27,28 +27,24 @@ python {{SKILL_DIR}}/value_momentum_scanner.py
 
 ---
 
-## Step 2: 상승 신호 점수 산출 (4개 병렬 subagent)
+## Step 2: 상승 신호 점수 산출 (20개 병렬 subagent)
 
-Step 1 JSON의 상위 20개 종목을 **5개씩 4그룹으로 나눠 병렬 subagent에 동시 dispatch**합니다.
+Step 1 JSON의 상위 20개 종목을 **종목당 1개 subagent, 총 20개를 단일 메시지에 동시 dispatch**합니다.
 
-### 그룹 분할
+### 각 Agent 프롬프트 템플릿
 
-- **Agent A**: rank 1~5
-- **Agent B**: rank 6~10
-- **Agent C**: rank 11~15
-- **Agent D**: rank 16~20
-
-### 각 Agent에게 전달할 프롬프트 템플릿
-
-다음 프롬프트를 4개 Agent에 동시에 dispatch합니다 (단일 메시지에 4개 Agent tool 호출):
+아래 프롬프트를 20개 Agent에 동시 dispatch합니다. `{TICKER}`, `{NAME}`, `{PRICE}`, `{SCORE}` 부분을 각 종목 데이터로 채워 넣습니다:
 
 ```
-당신은 주식 리서치 분석가입니다. 아래 종목들의 단기 상승 신호를 웹서치로 확인하고 점수를 매기세요.
+당신은 주식 리서치 분석가입니다. 아래 종목 하나의 단기 상승 신호를 웹서치로 확인하고 점수를 매기세요.
 
 ## 담당 종목
-{해당 그룹의 ticker, name, current_price, undervalue_score}
+- Ticker: {TICKER}
+- 회사명: {NAME}
+- 현재가: ${PRICE}
+- 저평가 지수: {SCORE}/100
 
-## 각 종목당 확인 항목 (총 7점)
+## 확인 항목 (총 7점)
 
 ### 1. 애널리스트 목표가 상향 (3점)
 검색: "{TICKER}" analyst upgrade price target raised site:finance.yahoo.com OR marketwatch.com OR benzinga.com
@@ -65,31 +61,28 @@ Step 1 JSON의 상위 20개 종목을 **5개씩 4그룹으로 나눠 병렬 suba
 - 최근 4주 내 임원급 내부자 순매수 또는 주요 기관 신규 포지션 → 2점
 - 없음 → 0점
 
-### 결격 사유 (자동 제외 플래그)
+### 결격 사유
 검색: "{TICKER}" SEC investigation OR class action lawsuit OR recall
 - SEC 조사/집단소송/대규모 리콜/회계 부정 → disqualified: true
-- 모호한 경우 → risk_warning: true (제외하지 않음)
+- 판단 모호한 경우 → risk_warning: true (제외하지 않음)
 
-## 출력 형식 (JSON만 출력, 다른 텍스트 없이)
+## 출력 형식 (JSON만, 다른 텍스트 없이)
 
-[
-  {
-    "ticker": "XXX",
-    "analyst_upgrade": 0 또는 3,
-    "earnings_soon": 0 또는 2,
-    "insider_buying": 0 또는 2,
-    "signal_total": 합계,
-    "disqualified": false,
-    "risk_warning": false,
-    "signal_summary": "웹서치 결과 한줄 요약 (한국어)"
-  },
-  ...
-]
+{
+  "ticker": "{TICKER}",
+  "analyst_upgrade": 0 또는 3,
+  "earnings_soon": 0 또는 2,
+  "insider_buying": 0 또는 2,
+  "signal_total": 합계,
+  "disqualified": false,
+  "risk_warning": false,
+  "signal_summary": "웹서치 결과 한줄 요약 (한국어)"
+}
 ```
 
-### 4개 Agent 동시 dispatch
+### 20개 Agent 동시 dispatch
 
-Agent tool을 단일 메시지에 4개 동시 호출합니다. 각 Agent가 완료되면 결과 JSON을 수집합니다.
+**Agent tool을 단일 메시지에 20개 동시 호출합니다.** 각 Agent는 독립적으로 1개 종목만 조사하고 JSON을 반환합니다. 모든 Agent 완료 후 결과를 수집합니다.
 
 ---
 
