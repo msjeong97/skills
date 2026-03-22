@@ -1,0 +1,6 @@
+numpy
+pandas
+yfinance
+
+# Optional (graceful fallback if not installed)
+pandas_ta
