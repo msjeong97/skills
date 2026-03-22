@@ -27,35 +27,69 @@ python {{SKILL_DIR}}/value_momentum_scanner.py
 
 ---
 
-## Step 2: 상승 신호 점수 산출 (AI 웹서치)
+## Step 2: 상승 신호 점수 산출 (4개 병렬 subagent)
 
-Step 1 JSON의 상위 20개 종목에 대해 순서대로 웹서치를 수행합니다.
+Step 1 JSON의 상위 20개 종목을 **5개씩 4그룹으로 나눠 병렬 subagent에 동시 dispatch**합니다.
 
-**각 종목당 3가지 확인:**
+### 그룹 분할
+
+- **Agent A**: rank 1~5
+- **Agent B**: rank 6~10
+- **Agent C**: rank 11~15
+- **Agent D**: rank 16~20
+
+### 각 Agent에게 전달할 프롬프트 템플릿
+
+다음 프롬프트를 4개 Agent에 동시에 dispatch합니다 (단일 메시지에 4개 Agent tool 호출):
+
+```
+당신은 주식 리서치 분석가입니다. 아래 종목들의 단기 상승 신호를 웹서치로 확인하고 점수를 매기세요.
+
+## 담당 종목
+{해당 그룹의 ticker, name, current_price, undervalue_score}
+
+## 각 종목당 확인 항목 (총 7점)
 
 ### 1. 애널리스트 목표가 상향 (3점)
-검색: `"{TICKER}" analyst upgrade price target raised 2025 site:finance.yahoo.com OR marketwatch.com OR benzinga.com`
-
-- 최근 4주 내 Goldman Sachs, Morgan Stanley, JPMorgan, BofA, Citi 등 주요 IB가 목표가를 올리거나 Buy/Outperform으로 신규 커버리지 → **3점**
-- 없음 → **0점**
+검색: "{TICKER}" analyst upgrade price target raised site:finance.yahoo.com OR marketwatch.com OR benzinga.com
+- 최근 4주 내 Goldman Sachs, Morgan Stanley, JPMorgan, BofA, Citi 등 주요 IB 상향/Buy 신규 → 3점
+- 없음 → 0점
 
 ### 2. 실적 발표 임박 (2점)
-검색: `"{TICKER}" earnings date next quarter`
-
-- 앞으로 2주 이내 실적 발표 예정 → **2점** (어닝 기대감이 주가에 선반영되는 PEAD 효과)
-- 없음 → **0점**
+검색: "{TICKER}" earnings date next
+- 앞으로 2주 이내 실적 발표 예정 → 2점
+- 없음 → 0점
 
 ### 3. 내부자/기관 매수 (2점)
-검색: `"{TICKER}" insider buying OR institutional accumulation 2025`
+검색: "{TICKER}" insider buying OR institutional accumulation
+- 최근 4주 내 임원급 내부자 순매수 또는 주요 기관 신규 포지션 → 2점
+- 없음 → 0점
 
-- 최근 4주 내 임원급 내부자 순매수 또는 주요 기관 신규 포지션 증가 보도 → **2점**
-- 없음 → **0점**
+### 결격 사유 (자동 제외 플래그)
+검색: "{TICKER}" SEC investigation OR class action lawsuit OR recall
+- SEC 조사/집단소송/대규모 리콜/회계 부정 → disqualified: true
+- 모호한 경우 → risk_warning: true (제외하지 않음)
 
-### 결격 사유 확인 (자동 제외)
-검색: `"{TICKER}" SEC investigation OR class action lawsuit OR massive recall 2025`
+## 출력 형식 (JSON만 출력, 다른 텍스트 없이)
 
-- SEC 공식 조사 개시, Class Action 집단소송, 대규모 리콜, 회계 부정 → **해당 종목 제외**
-- 판단이 모호한 경우 → 제외하지 않고 출력에 `(⚠️ 리스크 확인 권고)` 추가
+[
+  {
+    "ticker": "XXX",
+    "analyst_upgrade": 0 또는 3,
+    "earnings_soon": 0 또는 2,
+    "insider_buying": 0 또는 2,
+    "signal_total": 합계,
+    "disqualified": false,
+    "risk_warning": false,
+    "signal_summary": "웹서치 결과 한줄 요약 (한국어)"
+  },
+  ...
+]
+```
+
+### 4개 Agent 동시 dispatch
+
+Agent tool을 단일 메시지에 4개 동시 호출합니다. 각 Agent가 완료되면 결과 JSON을 수집합니다.
 
 ---
 
