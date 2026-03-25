@@ -14,7 +14,7 @@ Claude Code에서 MCP 서버는 `~/.claude/settings.json`이 아닌 `~/.claude.j
 다음 Bash 명령어를 실행합니다:
 
 ```bash
-claude mcp add memory -- npx -y @modelcontextprotocol/server-memory@latest
+claude mcp add -s user memory -- npx -y @modelcontextprotocol/server-memory@latest
 ```
 
 등록 확인:

@@ -31,14 +31,18 @@ triggers:
 
 ### Step 1: MCP 설정 확인
 
-`~/.claude/settings.json`을 Read 도구로 읽어 `mcpServers.memory` 키가 있는지 확인합니다.
+Bash 도구로 아래 명령을 실행해 `memory` MCP 서버가 글로벌 등록됐는지 확인합니다:
 
-**없는 경우:**
+```bash
+claude mcp list 2>/dev/null | grep -q "^memory" && echo "EXISTS" || echo "NOT_FOUND"
+```
+
+**NOT_FOUND인 경우:**
 - `setup.md`를 Read 도구로 읽어 **섹션 A (MCP 설정 주입)** 절차를 수행합니다.
 - 완료 후 다음 메시지를 출력하고 **여기서 완전히 중단**합니다 (Phase 1~4 진행 금지):
   > "MCP memory server 설정이 완료됐습니다. Claude Code를 재시작한 후 다시 질문해 주세요."
 
-**있는 경우:** Step 2로 이동합니다.
+**EXISTS인 경우:** Step 2로 이동합니다.
 
 ### Step 2: 그래프 워밍 확인
 
