@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Value Momentum Screener v1.0
-미국 시총 상위 150개 우량주 중 저평가 + 단기 반등 신호 종목 Top 20 출력
+Value Momentum Screener v2.0
+미국 시총 상위 150개 우량주 중 저평가 + 단기 반등 신호 종목 Top 10 출력
 
 Usage:
     python value_momentum_scanner.py
@@ -552,14 +552,14 @@ def compute_scores(qualified: list, sector_stats: dict) -> list:
 
 # ── 결과 출력 ────────────────────────────────────────────────────────────────
 
-def output_results(top20: list):
-    """상위 20개 결과를 텍스트 + JSON으로 출력."""
+def output_results(top10: list):
+    """상위 10개 결과를 텍스트 + JSON으로 출력."""
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
     print(f"\n{'='*65}")
-    print(f"  📊 저평가 지수 Top {len(top20)} — {now}")
+    print(f"  📊 저평가 지수 Top {len(top10)} — {now}")
     print(f"{'='*65}\n")
 
-    for i, r in enumerate(top20, 1):
+    for i, r in enumerate(top10, 1):
         price = f"${r['current_price']:.2f}" if r['current_price'] else "N/A"
         low = f"${r['52w_low']:.2f}" if r['52w_low'] else "N/A"
         tech = r['detail']['technical']
@@ -593,10 +593,10 @@ def output_results(top20: list):
 
     # JSON 출력 (AI 상승 신호 단계에서 활용)
     print(f"\n{'='*65}")
-    print(f"  📋 AI 웹서치용 JSON")
+    print(f"  📋 AI 웹서치용 JSON (Batch)")
     print(f"{'='*65}\n")
     json_data = []
-    for i, r in enumerate(top20):
+    for i, r in enumerate(top10):
         tech = r['detail']['technical']
         val = r['detail']['valuation']
         json_data.append({
@@ -605,7 +605,7 @@ def output_results(top20: list):
             'name': r['name'],
             'sector': r['sector'],
             'current_price': r['current_price'],
-            'undervalue_score': r['undervalue_score'],
+            'quant_score_70': round(r['undervalue_score'] * 0.7, 1),  # 100점 → 70점 리스케일
             'key_signals': {
                 'rsi': tech.get('rsi', {}).get('value'),
                 'pct_from_52w_low': tech.get('52w_low', {}).get('pct_from_low'),
@@ -621,25 +621,25 @@ def output_results(top20: list):
 
 # ── 결과 저장 ────────────────────────────────────────────────────────────────
 
-def save_top20_json(top20: list, skill_dir: str):
-    """Top 20 정량 데이터를 날짜별 JSON으로 저장 (AI 웹서치 단계 및 백테스팅용)."""
+def save_top10_json(top10: list, skill_dir: str):
+    """Top 10 정량 데이터를 날짜별 JSON으로 저장 (AI 웹서치 단계 및 백테스팅용)."""
     import os
     results_dir = os.path.join(skill_dir, "results")
     os.makedirs(results_dir, exist_ok=True)
 
     date_str = datetime.now().strftime('%Y-%m-%d')
-    filepath = os.path.join(results_dir, f"{date_str}-top20-raw.json")
+    filepath = os.path.join(results_dir, f"{date_str}-top10-raw.json")
 
     payload = {
         "scan_date": datetime.now().strftime('%Y-%m-%d %H:%M'),
         "universe_size": len(TOP_150_TICKERS),
-        "top20": top20,
+        "top10": top10,
     }
 
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
-    print(f"\n  💾 Top 20 저장됨: {filepath}")
+    print(f"\n  💾 Top 10 저장됨: {filepath}")
     return filepath
 
 
@@ -675,14 +675,14 @@ def main():
         print("❌ 점수 계산 실패.")
         sys.exit(1)
 
-    # 5. 상위 20개 추출 후 출력
-    top20 = sorted(scored, key=lambda x: x['undervalue_score'], reverse=True)[:20]
-    output_results(top20)
+    # 5. 상위 10개 추출 후 출력
+    top10 = sorted(scored, key=lambda x: x['undervalue_score'], reverse=True)[:10]
+    output_results(top10)
 
-    # 6. Top 20 JSON 파일 저장
+    # 6. Top 10 JSON 파일 저장
     import os
     skill_dir = os.path.dirname(os.path.abspath(__file__))
-    save_top20_json(top20, skill_dir)
+    save_top10_json(top10, skill_dir)
 
     print(f"\n{'='*65}")
     print(f"  ✅ 스캔 완료. 위 JSON을 AI에게 전달해 상승 신호 점수를 받으세요.")
