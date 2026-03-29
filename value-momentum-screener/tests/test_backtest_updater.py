@@ -63,7 +63,7 @@ def test_parse_catalyst_score_returns_none_when_not_found():
 
 # --- update_md_price_table ---
 
-def test_update_md_price_table_fills_empty_cells():
+def test_update_md_price_table_fills_empty_cells(tmp_path):
     md_content = (
         "### 1. CI — The Cigna Group\n\n"
         "**가격 추적**\n\n"
@@ -71,13 +71,11 @@ def test_update_md_price_table_fills_empty_cells():
         "|--------|--------|--------|--------|\n"
         "| $261.96 | | | |\n"
     )
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
-        f.write(md_content)
-        md_path = Path(f.name)
+    md_path = tmp_path / "test.md"
+    md_path.write_text(md_content)
 
     changed = update_md_price_table(
-        md_path,
-        base_price=261.96,
+        md_path, ticker="CI", base_price=261.96,
         prices={"1w": 270.00, "2w": None, "4w": None},
     )
 
@@ -85,48 +83,71 @@ def test_update_md_price_table_fills_empty_cells():
     assert changed is True
     assert "$270.00" in result
     assert "+3.1%" in result
-    md_path.unlink()
 
 
-def test_update_md_price_table_skips_already_filled():
+def test_update_md_price_table_skips_already_filled(tmp_path):
     md_content = (
+        "### 1. CI — The Cigna Group\n\n"
         "| 기준일 | 1주 후 | 2주 후 | 4주 후 |\n"
         "|--------|--------|--------|--------|\n"
         "| $261.96 | $270.00 (+3.1%) | | |\n"
     )
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
-        f.write(md_content)
-        md_path = Path(f.name)
+    md_path = tmp_path / "test.md"
+    md_path.write_text(md_content)
 
     changed = update_md_price_table(
-        md_path,
-        base_price=261.96,
+        md_path, ticker="CI", base_price=261.96,
         prices={"1w": 275.00, "2w": None, "4w": None},
     )
 
     assert changed is False
-    md_path.unlink()
 
 
-def test_update_md_price_table_shows_negative_return():
+def test_update_md_price_table_shows_negative_return(tmp_path):
     md_content = (
+        "### 1. CI — The Cigna Group\n\n"
         "| 기준일 | 1주 후 | 2주 후 | 4주 후 |\n"
         "|--------|--------|--------|--------|\n"
         "| $261.96 | | | |\n"
     )
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
-        f.write(md_content)
-        md_path = Path(f.name)
+    md_path = tmp_path / "test.md"
+    md_path.write_text(md_content)
 
     update_md_price_table(
-        md_path,
-        base_price=261.96,
+        md_path, ticker="CI", base_price=261.96,
         prices={"1w": 250.00, "2w": None, "4w": None},
     )
 
     result = md_path.read_text()
     assert "-4.6%" in result
-    md_path.unlink()
+
+
+def test_update_md_price_table_scopes_to_ticker_section(tmp_path):
+    """같은 가격을 가진 두 종목: 올바른 섹션만 업데이트."""
+    md_content = (
+        "### 1. CI — The Cigna Group\n\n"
+        "| 기준일 | 1주 후 | 2주 후 | 4주 후 |\n"
+        "|--------|--------|--------|--------|\n"
+        "| $261.96 | | | |\n\n"
+        "### 2. OTHER — Other Company\n\n"
+        "| 기준일 | 1주 후 | 2주 후 | 4주 후 |\n"
+        "|--------|--------|--------|--------|\n"
+        "| $261.96 | | | |\n"
+    )
+    md_path = tmp_path / "test.md"
+    md_path.write_text(md_content)
+
+    update_md_price_table(
+        md_path, ticker="CI", base_price=261.96,
+        prices={"1w": 270.00, "2w": None, "4w": None},
+    )
+
+    result = md_path.read_text()
+    lines = result.split("\n")
+    filled_rows = [l for l in lines if "$261.96" in l and "$270.00" in l]
+    empty_rows = [l for l in lines if "$261.96" in l and "$270.00" not in l and "|" in l]
+    assert len(filled_rows) == 1   # CI만 채워짐
+    assert len(empty_rows) == 1    # OTHER는 그대로
 
 
 # --- get_price_on_date ---
