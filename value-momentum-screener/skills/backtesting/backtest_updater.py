@@ -77,3 +77,52 @@ def update_md_price_table(
         return False
     md_path.write_text(new_content, encoding="utf-8")
     return True
+
+
+# ── 데이터 로딩 ───────────────────────────────────────────────
+
+def load_scan_results(results_dir: Path) -> list[dict]:
+    """
+    results_dir의 *-raw.json 파일을 모두 읽어 스캔 기록 목록 반환.
+    반환 형식: [{"scan_date": "YYYY-MM-DD", "picks": [...], "json_file": Path}]
+    """
+    scans = []
+    for json_file in sorted(results_dir.glob("*-raw.json")):
+        with open(json_file, encoding="utf-8") as f:
+            data = json.load(f)
+        scan_date = data["scan_date"].split(" ")[0]
+        picks = extract_top_picks(data)
+        scans.append({
+            "scan_date": scan_date,
+            "picks": picks,
+            "json_file": json_file,
+        })
+    return scans
+
+
+# ── 가격 조회 ─────────────────────────────────────────────────
+
+def get_price_on_date(ticker: str, target_date: str) -> float | None:
+    """
+    target_date(YYYY-MM-DD) 당일 또는 이후 첫 거래일 종가 반환.
+    미래 날짜이면 None 반환.
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        print("yfinance 미설치. pip install yfinance", file=sys.stderr)
+        return None
+
+    today = datetime.today().date()
+    target = datetime.strptime(target_date, "%Y-%m-%d").date()
+    if target > today:
+        return None
+
+    end = target + timedelta(days=5)
+    hist = yf.Ticker(ticker).history(
+        start=target.strftime("%Y-%m-%d"),
+        end=end.strftime("%Y-%m-%d"),
+    )
+    if hist.empty:
+        return None
+    return round(float(hist["Close"].iloc[0]), 2)
