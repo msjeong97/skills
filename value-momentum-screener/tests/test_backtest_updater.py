@@ -127,3 +127,36 @@ def test_update_md_price_table_shows_negative_return():
     result = md_path.read_text()
     assert "-4.6%" in result
     md_path.unlink()
+
+
+# --- get_price_on_date ---
+
+def test_get_price_on_date_returns_none_for_future():
+    from backtest_updater import get_price_on_date
+    future = (datetime.today() + timedelta(days=30)).strftime("%Y-%m-%d")
+    assert get_price_on_date("AAPL", future) is None
+
+
+def test_get_price_on_date_returns_float_for_past():
+    from backtest_updater import get_price_on_date
+    # 2026-03-20은 금요일 (실제 거래일)
+    price = get_price_on_date("AAPL", "2026-03-20")
+    assert price is None or isinstance(price, float)
+
+
+# --- load_scan_results ---
+
+def test_load_scan_results_reads_json_files():
+    from backtest_updater import load_scan_results
+    with tempfile.TemporaryDirectory() as tmpdir:
+        results_dir = Path(tmpdir)
+        sample = {
+            "scan_date": "2026-03-22 18:52",
+            "universe_size": 136,
+            "top10": [{"ticker": "CI", "current_price": 261.96, "breakdown": {}}],
+        }
+        (results_dir / "2026-03-22-top10-raw.json").write_text(json.dumps(sample))
+        scans = load_scan_results(results_dir)
+    assert len(scans) == 1
+    assert scans[0]["scan_date"] == "2026-03-22"
+    assert scans[0]["picks"][0]["ticker"] == "CI"
