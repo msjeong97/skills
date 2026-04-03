@@ -17,13 +17,20 @@ user_invocable: true
 
 ---
 
-## Step 1: Python 스캐너 실행
+## Step 1: 스크리너 실행 (Claude Code subprocess)
 
+```bash
+python {{SKILL_DIR}}/run_screener.py
+```
+
+약 2~4분 소요. `claude -p /value-momentum-screener` 를 subprocess로 실행하고, 완료되면 결과를 Telegram으로 자동 전송합니다.
+
+**Telegram 전송 조건:** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 환경변수가 설정된 경우에만 전송합니다. 미설정 시 터미널 출력만 합니다.
+
+**Telegram 미설정 시 기존 방식 (직접 실행):**
 ```bash
 python {{SKILL_DIR}}/value_momentum_scanner.py
 ```
-
-약 2~4분 소요. 스캔이 완료되면 Quant 점수 Top 10 목록과 AI 웹서치용 JSON이 출력됩니다.
 
 ---
 
