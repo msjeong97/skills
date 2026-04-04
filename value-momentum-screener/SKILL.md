@@ -17,68 +17,48 @@ user_invocable: true
 
 ---
 
-## Step 1: 스크리너 실행 (Claude Code subprocess)
+## Step 1: Python 스캐너 실행
 
 ```bash
-python {{SKILL_DIR}}/run_screener.py
+python {{SKILL_DIR}}/value_momentum_scanner.py --json-only
 ```
 
-약 2~4분 소요. `claude -p /value-momentum-screener` 를 subprocess로 실행하고, 완료되면 결과를 Telegram으로 자동 전송합니다.
-
-**Telegram 전송 조건:** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 환경변수가 설정된 경우에만 전송합니다. 미설정 시 터미널 출력만 합니다.
-
-**Telegram 미설정 시 기존 방식 (직접 실행):**
-```bash
-python {{SKILL_DIR}}/value_momentum_scanner.py
-```
+약 2~4분 소요. 스캔이 완료되면 Quant 점수 Top 10 목록 JSON이 출력됩니다 (터미널 서식 출력 생략으로 토큰 절감).
 
 ---
 
 ## Step 2: Momentum 점수 산출 (직접 웹서치)
 
-**Agent 호출 없이** Claude가 직접 WebSearch tool로 10개 종목을 조사합니다.
+**Agent 호출 없이** Claude가 직접 WebSearch tool로 **상위 7개 종목**을 조사합니다. (10위권 종목은 Top 5 선정에서 거의 탈락하므로 조사 생략)
 
 ### 검색 방법
 
-각 종목에 대해 아래 3가지를 순차 검색합니다. 검색 쿼리를 한 번에 여러 종목/항목에 대해 병렬로 날려도 됩니다.
+각 종목에 대해 **2개 쿼리만** 실행합니다. 7개 종목을 병렬로 동시에 날립니다.
 
-**① 애널리스트 상향 (10점)**
+**쿼리 A — 상승 촉매 (애널리스트 + 실적 + 내부자 통합)**
 ```
-검색 쿼리: {TICKER} analyst upgrade price target raised 2025
-- 최근 4주 내 주요 IB(Goldman, Morgan Stanley, JPMorgan, BofA, Citi 등) 상향/Buy 신규 → 10점
-- 중소형 IB 상향 또는 Hold 유지 목표가 상향 → 5점
-- 없음 → 0점
+검색 쿼리: {TICKER} analyst upgrade earnings date insider buying 2025
 ```
+결과에서 아래 3가지를 한 번에 추출합니다:
+- **애널리스트 상향 (10점)**: 최근 4주 내 주요 IB Buy/Outperform 상향 → 10점, 중소형 IB → 5점, 없음 → 0점
+- **실적 임박 (10점)**: 2주 이내 → 10점, 2~4주 이내 → 5점, 없음 → 0점
+- **내부자/기관 매수 (10점)**: 임원급 순매수 또는 주요 기관 신규 포지션 → 10점, 소규모 → 5점, 없음 → 0점
 
-**② 실적 발표 임박 (10점)**
+**쿼리 B — 결격 사유 확인**
 ```
-검색 쿼리: {TICKER} earnings date next quarter
-- 앞으로 2주 이내 → 10점
-- 2~4주 이내 → 5점
-- 없음 → 0점
+검색 쿼리: {TICKER} SEC investigation class action lawsuit recall 2025
 ```
-
-**③ 내부자/기관 매수 (10점)**
-```
-검색 쿼리: {TICKER} insider buying institutional accumulation 2025
-- 최근 4주 내 임원급 순매수 또는 주요 기관 신규 포지션 → 10점
-- 소규모 내부자 매수 → 5점
-- 없음 → 0점
-```
-
-**④ 결격 사유 확인 (병렬 검색)**
-```
-검색 쿼리: {TICKER} SEC investigation OR class action lawsuit OR recall
-- SEC 조사/집단소송/대규모 리콜 → disqualified: true
-- 판단 모호 → risk_warning: true (제외 안 함)
-```
+- SEC 조사/집단소송/대규모 리콜 → `disqualified: true`
+- 판단 모호 → `risk_warning: true` (제외 안 함)
 
 ### 처리 방식
 
-10개 종목 × 4개 쿼리 = 총 40개 검색을 **가능한 한 병렬로** 실행합니다. 결과를 취합해 아래 구조로 내부 정리합니다:
+7개 종목 × 2개 쿼리 = 총 **14개 검색**을 **모두 병렬로** 실행합니다.
+
+각 검색 결과에서 즉시 구조화된 점수만 추출하고 원문 텍스트는 버립니다:
 
 ```
-ticker | analyst | earnings | insider | momentum_total | disqualified | catalyst_summary
+ticker | analyst(0/5/10) | earnings(0/5/10) | insider(0/5/10) | disqualified | catalyst_summary(1문장)
 ```
 
 ---
