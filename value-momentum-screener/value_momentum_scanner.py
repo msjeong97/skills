@@ -12,6 +12,7 @@ warnings.filterwarnings("ignore")
 
 import sys
 import json
+import argparse
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -23,6 +24,19 @@ try:
     HAS_PANDAS_TA = True
 except ImportError:
     HAS_PANDAS_TA = False
+
+
+def parse_args(argv=None):
+    """CLI 인자 파싱."""
+    parser = argparse.ArgumentParser(description="Value Momentum Scanner")
+    parser.add_argument(
+        "--json-only",
+        action="store_true",
+        dest="json_only",
+        help="터미널 서식 출력 생략, JSON만 출력 (토큰 절감용)",
+    )
+    return parser.parse_args(argv)
+
 
 # ── 시총 상위 150개 우량주 (금융주 제외, 분기 1회 업데이트) ─────────────────
 TOP_150_TICKERS = [
@@ -646,12 +660,16 @@ def save_top10_json(top10: list, skill_dir: str):
 # ── 메인 ─────────────────────────────────────────────────────────────────────
 
 def main():
-    print(f"\n🔍 Value Momentum Screener v1.0")
-    print(f"   대상 종목: {len(TOP_150_TICKERS)}개 | {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
+    args = parse_args()
+
+    if not args.json_only:
+        print(f"\n🔍 Value Momentum Screener v1.0")
+        print(f"   대상 종목: {len(TOP_150_TICKERS)}개 | {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
 
     # 1. 데이터 수집
     all_data = collect_all_data(TOP_150_TICKERS)
-    print(f"\n  ✅ 데이터 수집 완료: {len(all_data)}/{len(TOP_150_TICKERS)}개\n")
+    if not args.json_only:
+        print(f"\n  ✅ 데이터 수집 완료: {len(all_data)}/{len(TOP_150_TICKERS)}개\n")
 
     if not all_data:
         print("❌ 데이터 수집 실패. 네트워크 연결을 확인하세요.")
@@ -659,7 +677,8 @@ def main():
 
     # 2. 사전 자격 필터
     qualified = apply_qualification_filter(all_data)
-    print(f"\n  ✅ 자격 통과: {len(qualified)}개 종목\n")
+    if not args.json_only:
+        print(f"\n  ✅ 자격 통과: {len(qualified)}개 종목\n")
 
     if not qualified:
         print("❌ 자격 통과 종목 없음.")
@@ -675,18 +694,22 @@ def main():
         print("❌ 점수 계산 실패.")
         sys.exit(1)
 
-    # 5. 상위 10개 추출 후 출력
+    # 5. 상위 10개 추출
     top10 = sorted(scored, key=lambda x: x['undervalue_score'], reverse=True)[:10]
-    output_results(top10)
 
-    # 6. Top 10 JSON 파일 저장
+    # 6. 터미널 서식 출력 (--json-only 시 생략)
+    if not args.json_only:
+        output_results(top10)
+
+    # 7. Top 10 JSON 파일 저장
     import os
     skill_dir = os.path.dirname(os.path.abspath(__file__))
     save_top10_json(top10, skill_dir)
 
-    print(f"\n{'='*65}")
-    print(f"  ✅ 스캔 완료. 위 JSON을 AI에게 전달해 상승 신호 점수를 받으세요.")
-    print(f"{'='*65}\n")
+    if not args.json_only:
+        print(f"\n{'='*65}")
+        print(f"  ✅ 스캔 완료. 위 JSON을 AI에게 전달해 상승 신호 점수를 받으세요.")
+        print(f"{'='*65}\n")
 
 
 if __name__ == "__main__":
