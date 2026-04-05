@@ -1,5 +1,9 @@
 # Phase 4: 지식 그래프 업데이트
 
+```bash
+VAULT="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Obsidian"
+```
+
 Phase 3에서 저장된 파일 경로를 받아 MCP 그래프를 업데이트합니다.
 
 ---
@@ -41,6 +45,8 @@ Phase 3에서 저장된 파일 경로를 받아 MCP 그래프를 업데이트합
 6. 파일의 frontmatter를 업데이트하여 Write 도구로 저장합니다:
    - `related_nodes`: 엔티티 이름 목록
    - `last_synced_with_graph`: 오늘 날짜 (YYYY-MM-DD)
+   - `source_count`: 이미 있으면 그대로 유지 (refine은 변경하지 않음)
+   - `related`: 기존 `[[링크]]` 목록 그대로 유지
 
 ---
 
