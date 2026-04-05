@@ -50,11 +50,11 @@ Moon Dev의 R-B-I(Research-Backtest-Implement) 시스템 기반 30일 단기 급
   - 80% 이상 시 `ctx_[주제]_[YYYYMMDD].md` 아카이브 파일 자동 생성
   - `/clear` + 아카이브 파일 로드 안내 (복붙 명령어 제공)
 
-### smart-kg-researcher
+### obsidian-ingester
 
 지식 그래프 기반 리서처. `~/knowledge/**/*.md` 파일과 MCP knowledge graph(server-memory)를 검색해 답변하고, 새 리서치를 YAML frontmatter `.md` 파일로 저장하며 MCP 그래프에 동기화.
 
-- 트리거: "지식 그래프에서 찾아줘", "kg에서 검색", "내 노트에서", `/smart-kg-researcher`
+- 트리거: "지식 그래프에서 찾아줘", "kg에서 검색", "내 노트에서", `/obsidian-ingester`
 - 기능:
   - `~/knowledge` 파일 + MCP 그래프 통합 검색
   - 새 리서치 자동 저장 및 그래프 동기화
