@@ -1,5 +1,5 @@
 ---
-name: smart-kg-researcher
+name: obsidian-ingester
 description: >
   LLM Wiki 패턴 기반 개인 지식 베이스 관리자.
   iCloud Obsidian vault의 wiki/**/*.md 파일과 MCP 지식 그래프를
