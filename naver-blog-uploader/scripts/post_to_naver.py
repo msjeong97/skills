@@ -327,7 +327,7 @@ def main():
     write_url = f"https://blog.naver.com/PostWriteForm.naver?blogId={args.blog_id}"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=True)
         ctx = browser.new_context()
         ctx.add_cookies(cookies)
         page = ctx.new_page()
