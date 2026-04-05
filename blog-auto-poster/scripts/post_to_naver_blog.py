@@ -175,7 +175,7 @@ async def post_blog(
     async with async_playwright() as p:
         browser = await p.chromium.launch_persistent_context(
             user_data_dir=CHROME_PROFILE,
-            headless=False,
+            headless=True,
             channel="chrome",
             args=["--start-maximized"],
         )
