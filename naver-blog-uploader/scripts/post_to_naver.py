@@ -1,15 +1,17 @@
 """
 네이버 블로그 자동 포스팅 스크립트 (SmartEditor 3 기준)
 
+필요 설정:
+    config/settings.json      — {"blog_id": "your_blog_id"}
+    config/naver_cookies.json — login_naver.py 실행 후 자동 생성
+
 사용법:
     python post_to_naver.py \
-        --blog-id "blog10_04" \
         --title "제목" \
         --content "본문 [그림1] 계속 [장소] [그림2]" \
         --images "img1.jpg,img2.jpg" \
         --tags "태그1,태그2" \
-        --map-url "https://naver.me/xxxx" \
-        --caller-chat-id "telegram:8279476113"
+        --map-url "https://naver.me/xxxx"
 """
 from __future__ import annotations
 
@@ -21,34 +23,12 @@ import sys
 import time
 from pathlib import Path
 
-CONFIG_PATH = Path(__file__).parent.parent / "config.json"
-
-
-def check_authorization(caller_chat_id: str | None) -> None:
-    """발신자 chat ID가 화이트리스트에 있는지 확인. 없으면 종료."""
-    if not CONFIG_PATH.exists():
-        print("오류: config.json 없음. 권한 확인 불가.")
-        sys.exit(1)
-
-    with open(CONFIG_PATH, encoding="utf-8") as f:
-        config = json.load(f)
-
-    authorized = config.get("authorized_chat_ids", [])
-
-    if not caller_chat_id:
-        print("오류: --caller-chat-id 미전달. 권한 없음.")
-        sys.exit(1)
-
-    if caller_chat_id not in authorized:
-        print(f"오류: 미인가 채널 ({caller_chat_id}). 발행 거부.")
-        sys.exit(1)
-
-    print(f"  ✓ 인증 완료: {caller_chat_id}")
+_SKILL_DIR = Path(__file__).parent.parent
+CONFIG_PATH = _SKILL_DIR / "config" / "settings.json"
+COOKIE_PATH = _SKILL_DIR / "config" / "naver_cookies.json"
 
 import pyperclip
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
-
-COOKIE_PATH = Path.home() / ".openclaw" / "naver_cookies.json"
 
 
 def load_cookies() -> list[dict]:
@@ -57,6 +37,18 @@ def load_cookies() -> list[dict]:
         sys.exit(1)
     with open(COOKIE_PATH, encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_settings() -> dict:
+    if not CONFIG_PATH.exists():
+        print("오류: config/settings.json 없음. blog_id를 포함한 파일을 생성해 주세요.")
+        sys.exit(1)
+    with open(CONFIG_PATH, encoding="utf-8") as f:
+        settings = json.load(f)
+    if "blog_id" not in settings:
+        print("오류: config/settings.json에 blog_id가 없습니다.")
+        sys.exit(1)
+    return settings
 
 
 def paste_text(page, text: str):
@@ -295,18 +287,16 @@ def add_place(page, place_name: str) -> bool:
 
 def main():
     parser = argparse.ArgumentParser(description="네이버 블로그 자동 포스팅")
-    parser.add_argument("--blog-id", default="blog10_04", help="네이버 블로그 ID")
     parser.add_argument("--title", required=True, help="포스트 제목")
     parser.add_argument("--content", required=True, help="본문 ([그림N], [장소] 마커 포함)")
     parser.add_argument("--images", default="", help="이미지 경로 (콤마 구분)")
     parser.add_argument("--tags", default="", help="태그 (콤마 구분)")
     parser.add_argument("--map-url", default="", help="네이버 지도 링크 (장소 자동 추가)")
     parser.add_argument("--no-publish", action="store_true", help="발행 안 하고 확인만")
-    parser.add_argument("--caller-chat-id", default="", help="발신자 채널 ID (인증용, 예: telegram:8279476113)")
     args = parser.parse_args()
 
-    # ── 인증 확인 ─────────────────────────────────────────────
-    check_authorization(args.caller_chat_id or None)
+    settings = load_settings()
+    blog_id = settings["blog_id"]
 
     images = [p.strip() for p in args.images.split(",") if p.strip()]
     tags = [t.strip() for t in args.tags.split(",") if t.strip()]
@@ -324,7 +314,7 @@ def main():
 
     content_parts = split_content(content, images)
     cookies = load_cookies()
-    write_url = f"https://blog.naver.com/PostWriteForm.naver?blogId={args.blog_id}"
+    write_url = f"https://blog.naver.com/PostWriteForm.naver?blogId={blog_id}"
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -414,10 +404,7 @@ def main():
 
         # ── 6. 최종 발행 ─────────────────────────────────────
         if args.no_publish:
-            print("\n[--no-publish] 스크린샷 저장 후 닫힘.")
-            page.screenshot(path="/tmp/naver_before_publish.png", full_page=False)
-            print("  스크린샷: /tmp/naver_before_publish.png")
-            time.sleep(3)
+            print("\n[--no-publish] 발행 없이 종료.")
         else:
             print("최종 발행 중...")
             try:
@@ -428,8 +415,13 @@ def main():
                 }""")
                 page.locator("[data-testid='seOnePublishBtn']").last.click(timeout=5000)
                 try:
-                    page.wait_for_url(re.compile(r"blog\.naver\.com/(?!PostWrite)\w"), timeout=15000)
-                    print(f"\n✅ 발행 완료! URL: {page.url}")
+                    page.wait_for_url(re.compile(r"blog\.naver\.com/(PostView|[a-zA-Z0-9_]+/\d+)"), timeout=15000)
+                    url = page.url
+                    log_no_match = re.search(r"logNo=(\d+)", url)
+                    log_no = log_no_match.group(1) if log_no_match else "unknown"
+                    print(f"\n✅ 발행 완료!")
+                    print(f"  logNo: {log_no}")
+                    print(f"  URL: https://blog.naver.com/{blog_id}/{log_no}")
                 except PlaywrightTimeoutError:
                     print(f"\n발행 시도 완료 (현재: {page.url})")
             except Exception as e:
