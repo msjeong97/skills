@@ -328,7 +328,7 @@ def main():
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        ctx = browser.new_context()
+        ctx = browser.new_context(viewport={"width": 1440, "height": 900})
         ctx.add_cookies(cookies)
         page = ctx.new_page()
 
@@ -414,19 +414,21 @@ def main():
 
         # ── 6. 최종 발행 ─────────────────────────────────────
         if args.no_publish:
-            print("\n[--no-publish] 10초 후 닫힘.")
-            time.sleep(10)
+            print("\n[--no-publish] 스크린샷 저장 후 닫힘.")
+            page.screenshot(path="/tmp/naver_before_publish.png", full_page=False)
+            print("  스크린샷: /tmp/naver_before_publish.png")
+            time.sleep(3)
         else:
             print("최종 발행 중...")
             try:
+                # 도움말 패널 pointer-events 비활성화 (발행 버튼 클릭 가림 방지)
                 page.evaluate("""() => {
-                    const btns = Array.from(document.querySelectorAll('button'))
-                        .filter(b => b.innerText.trim() === '발행');
-                    if (btns.length >= 2) btns[btns.length - 1].click();
-                    else if (btns.length === 1) btns[0].click();
+                    const c = document.querySelector('[class*="container__HW_tc"]');
+                    if (c) c.style.pointerEvents = 'none';
                 }""")
+                page.locator("[data-testid='seOnePublishBtn']").last.click(timeout=5000)
                 try:
-                    page.wait_for_url(re.compile(r"blog\.naver\.com/\w+/\d+"), timeout=15000)
+                    page.wait_for_url(re.compile(r"blog\.naver\.com/(?!PostWrite)\w"), timeout=15000)
                     print(f"\n✅ 발행 완료! URL: {page.url}")
                 except PlaywrightTimeoutError:
                     print(f"\n발행 시도 완료 (현재: {page.url})")
