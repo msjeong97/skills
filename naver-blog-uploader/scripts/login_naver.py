@@ -1,6 +1,6 @@
 """
 네이버 로그인 후 쿠키를 저장하는 스크립트.
-사용자가 직접 로그인하면 쿠키를 ~/.openclaw/naver_cookies.json에 저장한다.
+사용자가 직접 로그인하면 쿠키를 config/naver_cookies.json에 저장한다.
 """
 
 import json
@@ -8,7 +8,8 @@ import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-COOKIE_PATH = Path.home() / ".openclaw" / "naver_cookies.json"
+_SKILL_DIR = Path(__file__).parent.parent
+COOKIE_PATH = _SKILL_DIR / "config" / "naver_cookies.json"
 NAVER_HOME = "https://www.naver.com/"
 
 

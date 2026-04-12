@@ -7,8 +7,10 @@ import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-COOKIE_PATH = Path.home() / ".openclaw" / "naver_cookies.json"
-BLOG_ID = "blog10_04"
+_SKILL_DIR = Path(__file__).parent.parent
+COOKIE_PATH = _SKILL_DIR / "config" / "naver_cookies.json"
+_settings = json.loads((_SKILL_DIR / "config" / "settings.json").read_text())
+BLOG_ID = _settings["blog_id"]
 PLACE_NAME = "위트앤미트 강남점"
 
 
