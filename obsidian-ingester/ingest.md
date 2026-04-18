@@ -27,7 +27,7 @@ VAULT="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Obsidian"
 
 ## I-3: 저장 경로 결정
 
-**기존 관련 페이지가 있는 경우** — 기존 페이지에 내용 추가할지 별도 페이지 생성할지 결정.
+아래 테이블로 카테고리를 결정한다. 모호하면 판단 규칙을 순서대로 적용.
 
 **카테고리 판단 테이블:**
 
@@ -44,11 +44,7 @@ VAULT="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Obsidian"
 3. "X란 무엇인가" 형태의 설명이다 → `concepts/`
 4. 두 개 이상 기술을 비교한다 → `analyses/`
 
-**새 주제인 경우:**
-- 개념·기능 설명 → `wiki/concepts/<topic>/`
-- 특정 소스 요약 → `wiki/sources/<topic>/`
-- 기술·시스템 엔티티 → `wiki/entities/`
-- 종합·비교 분석 → `wiki/analyses/`
+**기존 관련 페이지가 있는 경우** — 기존 페이지에 내용 추가할지 별도 페이지 생성할지 결정.
 
 파일명: 영어 kebab-case, zero-padding 인덱스
 ```bash
