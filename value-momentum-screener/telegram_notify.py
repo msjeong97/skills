@@ -26,8 +26,7 @@ def parse_summary_table(md_text: str) -> list[dict]:
     반환: [{"rank", "ticker", "price", "total", "quant", "catalyst", "summary"}, ...]
     """
     table_pattern = re.compile(
-        r'## Top 5 추천 종목.*?\n(?:.*?\n)*?\|[-| ]+\|\n((?:\|.*?\n)+)',
-        re.DOTALL,
+        r'## Top 5 추천 종목[^\n]*\n(?:[^\n]*\n)*?\|[-| ]+\|\n((?:\|.*?\n)+)',
     )
     m = table_pattern.search(md_text)
     if not m:
@@ -71,8 +70,8 @@ def parse_stock_sections(md_text: str) -> list[dict]:
         score_m = re.search(r'\*\*점수 내역\*\*([\s\S]*?)(?=\n\*\*|\n---|\Z)', body)
         score_text = score_m.group(1) if score_m else body
 
-        def _extract(pattern):
-            hit = re.search(pattern + r'(.+?)(?:\n|$)', score_text)
+        def _extract(pattern, _st=score_text):
+            hit = re.search(pattern + r'([^\r\n]+)', _st)
             return hit.group(1).strip() if hit else ""
 
         stocks.append({
@@ -86,3 +85,54 @@ def parse_stock_sections(md_text: str) -> list[dict]:
             "risk": _extract(r'- ⚠️ 리스크: '),
         })
     return stocks
+
+
+# ── 포맷 ──────────────────────────────────────────────────────────────────────
+
+_ESCAPE_CHARS = r'_*[]()~`>#+-=|{}.!$'
+
+
+def escape_md(text: str) -> str:
+    """Telegram MarkdownV2 특수문자 이스케이프."""
+    for ch in _ESCAPE_CHARS:
+        text = text.replace(ch, f'\\{ch}')
+    return text
+
+
+def format_header_message(date_str: str, summary_rows: list[dict]) -> str:
+    """헤더 요약 메시지 생성."""
+    lines = [
+        "📊 *Value Momentum Screener*",
+        f"{escape_md(date_str)} \\| 유니버스 150종목",
+        "",
+        "🏆 *Top 5*",
+    ]
+    for row in summary_rows:
+        lines.append(
+            f"{escape_md(row['rank'])}\\. *{escape_md(row['ticker'])}* "
+            f"— {escape_md(row['total'])} "
+            f"\\[계량 {escape_md(row['quant'])} \\+ 촉매 {escape_md(row['catalyst'])}\\]"
+        )
+        lines.append(f"  💬 {escape_md(row['summary'])}")
+    lines += ["", "⚠️ 투자 조언 아님\\."]
+    return "\n".join(lines)
+
+
+def format_stock_message(summary: dict, detail: dict) -> str:
+    """종목별 상세 메시지 생성."""
+    lines = [
+        f"*{escape_md(detail['rank'])}\\. {escape_md(detail['title'])}*",
+        "",
+        f"💰 현재가: {escape_md(summary['price'])}",
+        f"📊 {escape_md(detail['total'])}",
+        "",
+    ]
+    if detail["pe_line"]:
+        lines.append(escape_md(detail["pe_line"]))
+    if detail["tech_line"]:
+        lines.append(escape_md(detail["tech_line"]))
+    if detail["catalyst"]:
+        lines += ["", f"💬 {escape_md(detail['catalyst'])}"]
+    if detail["risk"]:
+        lines += ["", f"⚠️ {escape_md(detail['risk'])}"]
+    return "\n".join(lines)
