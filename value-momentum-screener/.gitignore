@@ -1,3 +1,4 @@
 results/
 results-backtesting/
 scoring_weights.json
+telegram_config.json
