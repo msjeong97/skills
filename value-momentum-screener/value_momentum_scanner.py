@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from datetime import datetime
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
@@ -24,6 +25,25 @@ try:
     HAS_PANDAS_TA = True
 except ImportError:
     HAS_PANDAS_TA = False
+
+# ── 스코어링 가중치 로딩 ────────────────────────────────────────────────────────
+_WEIGHTS_PATH = Path(__file__).parent / "scoring_weights.json"
+_DEFAULT_WEIGHTS = {
+    "technical": {"52w_low": 15, "rsi": 12, "macd": 12, "bollinger": 8, "volume": 8},
+    "valuation": {"pe": 10, "fcf_yield": 10, "peg": 5},
+}
+
+def _load_weights() -> dict:
+    try:
+        data = json.loads(_WEIGHTS_PATH.read_text(encoding="utf-8"))
+        return {
+            "technical": {**_DEFAULT_WEIGHTS["technical"], **data.get("technical", {})},
+            "valuation": {**_DEFAULT_WEIGHTS["valuation"], **data.get("valuation", {})},
+        }
+    except Exception:
+        return _DEFAULT_WEIGHTS
+
+W = _load_weights()
 
 
 def parse_args(argv=None):
@@ -325,28 +345,30 @@ def score_valuation(d: dict, sector_stats: dict) -> tuple:
                     'score': pe_score}
     score += pe_score
 
-    # FCF Yield 점수 (10점)
+    # FCF Yield 점수
     fcf_yield = _calc_fcf_yield(d)
+    fcf_max = W["valuation"]["fcf_yield"]
     fcf_score = 0
     if fcf_yield is not None and not np.isnan(fcf_yield):
         if fcf_yield > 0.05:
-            fcf_score = 10
+            fcf_score = fcf_max
         elif fcf_yield > 0.03:
-            fcf_score = 6
+            fcf_score = round(fcf_max * 0.6)
         elif fcf_yield > 0.01:
-            fcf_score = 3
+            fcf_score = round(fcf_max * 0.3)
     detail['fcf_yield'] = {'value': round(fcf_yield * 100, 2) if fcf_yield else None,
                            'score': fcf_score}
     score += fcf_score
 
-    # PEG 점수 (5점)
+    # PEG 점수
     peg = d.get('peg_ratio')
+    peg_max = W["valuation"]["peg"]
     peg_score = 0
     if peg and isinstance(peg, (int, float)) and peg > 0:
         if peg < 1.0:
-            peg_score = 5
+            peg_score = peg_max
         elif peg <= 1.5:
-            peg_score = 3
+            peg_score = round(peg_max * 0.6)
     detail['peg'] = {'value': round(peg, 2) if peg else None, 'score': peg_score}
     score += peg_score
 
@@ -449,10 +471,11 @@ def score_technical(d: dict) -> tuple:
         pct_from_low = (current - float(close.min())) / float(close.min()) * 100
 
     # 200% 초과는 yfinance 스플릿 미조정 데이터 이슈로 0점 처리
+    low_max = W["technical"]["52w_low"]
     if 5 <= pct_from_low <= 20:
-        low_score = 15
+        low_score = low_max
     elif 20 < pct_from_low <= 35:
-        low_score = 7
+        low_score = round(low_max * 0.5)
     else:
         low_score = 0
     detail['52w_low'] = {'pct_from_low': round(pct_from_low, 1), 'score': low_score}
@@ -461,11 +484,12 @@ def score_technical(d: dict) -> tuple:
     # ── RSI(14) (12점) ──────────────────────────────────────────────────────
     rsi_series = _calc_rsi(close)
     rsi = float(rsi_series.iloc[-1]) if not rsi_series.empty and not pd.isna(rsi_series.iloc[-1]) else None
+    rsi_max = W["technical"]["rsi"]
     if rsi is not None:
         if 30 <= rsi <= 45:
-            rsi_score = 12
+            rsi_score = rsi_max
         elif 45 < rsi <= 55:
-            rsi_score = 6
+            rsi_score = round(rsi_max * 0.5)
         else:
             rsi_score = 0
     else:
@@ -475,13 +499,14 @@ def score_technical(d: dict) -> tuple:
 
     # ── MACD(12,26,9) 골든크로스 최근 5거래일 (12점) ────────────────────────
     macd_line, signal_line = _calc_macd(close)
+    macd_max = W["technical"]["macd"]
     macd_score = 0
     if len(macd_line) >= 6:
         recent_macd = macd_line.iloc[-6:].values
         recent_signal = signal_line.iloc[-6:].values
         for i in range(len(recent_macd) - 1):
             if recent_macd[i] < recent_signal[i] and recent_macd[i+1] >= recent_signal[i+1]:
-                macd_score = 12
+                macd_score = macd_max
                 break
     detail['macd'] = {
         'golden_cross': macd_score > 0,
@@ -493,13 +518,14 @@ def score_technical(d: dict) -> tuple:
 
     # ── 볼린저밴드 %B 반등 (8점) ────────────────────────────────────────────
     pct_b = _calc_bollinger_pct_b(close)
+    bb_max = W["technical"]["bollinger"]
     bb_score = 0
     current_b = float(pct_b.iloc[-1]) if not pd.isna(pct_b.iloc[-1]) else None
     if len(pct_b) >= 11 and current_b is not None:
         prev_10 = pct_b.iloc[-11:-1].dropna()
         touched_low = any(v < 0.2 for v in prev_10)
         if touched_low and current_b > 0.3:
-            bb_score = 8
+            bb_score = bb_max
     detail['bollinger'] = {'pct_b': round(current_b, 3) if current_b is not None else None,
                            'score': bb_score}
     score += bb_score
@@ -517,7 +543,7 @@ def score_technical(d: dict) -> tuple:
                 price_chg = (curr_close - prev_close) / prev_close if prev_close > 0 else 0
                 vol_ratio = curr_vol / vol_20d_avg if vol_20d_avg > 0 else 0
                 if price_chg >= 0.01 and vol_ratio >= 1.5:
-                    vol_score = 8
+                    vol_score = W["technical"]["volume"]
                     break
         except Exception:
             pass

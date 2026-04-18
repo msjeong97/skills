@@ -247,14 +247,28 @@ def main():
         default=Path(__file__).parent.parent.parent / "results",
         help="results 디렉토리 경로",
     )
+    parser.add_argument(
+        "--backtesting-dir",
+        type=Path,
+        default=Path(__file__).parent.parent.parent / "results-backtesting",
+        help="백테스팅 결과 저장 디렉토리 경로",
+    )
     args = parser.parse_args()
+
+    args.backtesting_dir.mkdir(exist_ok=True)
 
     print(f"결과 디렉토리: {args.results_dir}", file=sys.stderr)
     data = run(args.results_dir)
 
     print(f"스캔 수: {data['total_scans']}, 픽 수: {data['total_picks']}, MD 업데이트: {data['md_updated_count']}건", file=sys.stderr)
 
-    # 분석 JSON을 stdout으로 출력 (SKILL.md에서 읽음)
+    # 분석 JSON을 results-backtesting에 저장
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    json_path = args.backtesting_dir / f"analysis-{date_str}.json"
+    json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"분석 JSON 저장됨: {json_path}", file=sys.stderr)
+
+    # stdout으로도 출력 (SKILL.md에서 읽음)
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
