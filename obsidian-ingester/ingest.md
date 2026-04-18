@@ -29,6 +29,21 @@ VAULT="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Obsidian"
 
 **기존 관련 페이지가 있는 경우** — 기존 페이지에 내용 추가할지 별도 페이지 생성할지 결정.
 
+**카테고리 판단 테이블:**
+
+| 카테고리 | 핵심 질문 | 예시 주제 |
+|----------|-----------|-----------|
+| `wiki/concepts/<topic>/` | "X가 **무엇이고 어떻게 작동**하는가?" | LSM-tree 원리, Kafka 파티셔닝, MVCC |
+| `wiki/sources/<topic>/` | "이 **특정 글·문서·영상**에서 뭘 배웠는가?" | 공식문서 섹션 요약, 블로그 포스트 정리 |
+| `wiki/entities/` | "X라는 기술의 **기본 정보 카드**가 필요한가?" | Apache Flink, Apache Paimon, Debezium |
+| `wiki/analyses/` | "여러 소스를 **종합·비교한 내 판단**인가?" | Paimon vs Iceberg 비교, CDC 툴 선택 |
+
+**모호할 때 판단 규칙 (위에서부터 순서대로 확인):**
+1. 소스 URL이 있다 → `sources/`
+2. 기술 이름 하나가 주제다 → `entities/`
+3. "X란 무엇인가" 형태의 설명이다 → `concepts/`
+4. 두 개 이상 기술을 비교한다 → `analyses/`
+
 **새 주제인 경우:**
 - 개념·기능 설명 → `wiki/concepts/<topic>/`
 - 특정 소스 요약 → `wiki/sources/<topic>/`
