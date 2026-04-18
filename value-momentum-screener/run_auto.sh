@@ -2,6 +2,7 @@
 # Value Momentum Screener — 자동 실행 스크립트 (cron용)
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.pyenv/bin:$HOME/.pyenv/shims:$PATH"
+export CLAUDE_CODE_OAUTH_TOKEN=$(grep -E '^export CLAUDE_CODE_OAUTH_TOKEN=' ~/.zshrc | cut -d'"' -f2)
 eval "$(pyenv init --path 2>/dev/null)"
 eval "$(pyenv init - 2>/dev/null)"
 
