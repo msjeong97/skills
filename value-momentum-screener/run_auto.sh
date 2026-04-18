@@ -22,5 +22,8 @@ cd "$SCRIPT_DIR"
 
 echo "완료: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
 
+# 텔레그램 알림 전송
+python "$SCRIPT_DIR/telegram_notify.py" --results-dir "$SCRIPT_DIR/results" >> "$LOG_FILE" 2>&1
+
 # 스크리너 완료 후 다시 잠자기
 osascript -e 'tell application "System Events" to sleep'
