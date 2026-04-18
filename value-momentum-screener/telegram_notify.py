@@ -89,7 +89,7 @@ def parse_stock_sections(md_text: str) -> list[dict]:
 
 # ── 포맷 ──────────────────────────────────────────────────────────────────────
 
-_ESCAPE_CHARS = r'_*[]()~`>#+-=|{}.!$'
+_ESCAPE_CHARS = '\\' + r'_*[]()~`>#+-=|{}.!$'
 
 
 def escape_md(text: str) -> str:
@@ -121,16 +121,16 @@ def format_header_message(date_str: str, summary_rows: list[dict]) -> str:
 def format_stock_message(summary: dict, detail: dict) -> str:
     """종목별 상세 메시지 생성."""
     lines = [
-        f"*{escape_md(detail['rank'])}\\. {escape_md(detail['title'])}*",
+        f"{escape_md(detail['rank'])}\\. *{escape_md(detail['title'])}*",
         "",
         f"💰 현재가: {escape_md(summary['price'])}",
         f"📊 {escape_md(detail['total'])}",
         "",
     ]
     if detail["pe_line"]:
-        lines.append(escape_md(detail["pe_line"]))
+        lines.append(f"📈 {escape_md(detail['pe_line'])}")
     if detail["tech_line"]:
-        lines.append(escape_md(detail["tech_line"]))
+        lines.append(f"📉 {escape_md(detail['tech_line'])}")
     if detail["catalyst"]:
         lines += ["", f"💬 {escape_md(detail['catalyst'])}"]
     if detail["risk"]:
