@@ -111,3 +111,70 @@ def test_parse_stock_sections_extracts_fields():
 def test_parse_stock_sections_no_risk_when_absent():
     stocks = parse_stock_sections(SAMPLE_MD)
     assert stocks[1]["risk"] == ""  # ADBE: 리스크 줄 없음
+
+
+from telegram_notify import escape_md, format_header_message, format_stock_message
+
+
+# ── escape_md ────────────────────────────────────────────────────────────────
+
+def test_escape_md_escapes_dollar():
+    assert escape_md("$182.14") == r"\$182\.14"
+
+
+def test_escape_md_escapes_brackets():
+    assert escape_md("[계량 70]") == r"\[계량 70\]"
+
+
+def test_escape_md_escapes_plus():
+    assert escape_md("+11.4%") == r"\+11\.4%"
+
+
+def test_escape_md_leaves_korean_untouched():
+    result = escape_md("JP모건 Buy")
+    assert "JP모건 Buy" in result
+
+
+# ── format_header_message ────────────────────────────────────────────────────
+
+def test_format_header_message_contains_all_tickers():
+    rows = parse_summary_table(SAMPLE_MD)
+    msg = format_header_message("2026-04-18", rows)
+    assert "CRM" in msg
+    assert "ADBE" in msg
+
+
+def test_format_header_message_contains_date():
+    rows = parse_summary_table(SAMPLE_MD)
+    msg = format_header_message("2026-04-18", rows)
+    assert "2026" in msg
+
+
+# ── format_stock_message ─────────────────────────────────────────────────────
+
+def test_format_stock_message_contains_price():
+    rows = parse_summary_table(SAMPLE_MD)
+    stocks = parse_stock_sections(SAMPLE_MD)
+    msg = format_stock_message(rows[0], stocks[0])
+    assert "182" in msg
+
+
+def test_format_stock_message_contains_total_score():
+    rows = parse_summary_table(SAMPLE_MD)
+    stocks = parse_stock_sections(SAMPLE_MD)
+    msg = format_stock_message(rows[0], stocks[0])
+    assert "90" in msg
+
+
+def test_format_stock_message_contains_risk_when_present():
+    rows = parse_summary_table(SAMPLE_MD)
+    stocks = parse_stock_sections(SAMPLE_MD)
+    msg = format_stock_message(rows[0], stocks[0])
+    assert "데이터침해" in msg
+
+
+def test_format_stock_message_no_risk_line_when_absent():
+    rows = parse_summary_table(SAMPLE_MD)
+    stocks = parse_stock_sections(SAMPLE_MD)
+    msg = format_stock_message(rows[1], stocks[1])
+    assert "리스크" not in msg
