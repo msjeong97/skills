@@ -169,6 +169,14 @@ def main():
     for c in changes:
         print(c)
 
+    # 합계 검증 (pe는 scoring에서 하드코딩 max 10, profitability 하드코딩 20)
+    tech_sum = sum(new_weights["technical"].values())
+    val_sum = 10 + new_weights["valuation"].get("fcf_yield", 0) + new_weights["valuation"].get("peg", 0)
+    total_max = tech_sum + val_sum + 20
+    print(f"\n가중치 최대 합계: {total_max}점 (technical {tech_sum} + valuation {val_sum} + profitability 20)")
+    if total_max != 100:
+        print(f"  ⚠️  합계가 100점이 아닙니다. quant_score_70은 동적 정규화로 자동 보정됩니다.")
+
     if args.dry_run:
         print("\n[dry-run] 파일 저장 안 함")
         return

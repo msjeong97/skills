@@ -46,6 +46,14 @@ def _load_weights() -> dict:
 W = _load_weights()
 
 
+def _max_possible_score() -> float:
+    """현재 W 기준 이론적 최대 점수 (profitability·PE는 하드코딩값 사용)."""
+    tech_max = sum(W["technical"].values())
+    val_max = 10 + W["valuation"].get("fcf_yield", 10) + W["valuation"].get("peg", 5)  # pe는 하드코딩 max 10
+    prof_max = 20  # roe(10) + op_margin(10) 하드코딩
+    return tech_max + val_max + prof_max
+
+
 def parse_args(argv=None):
     """CLI 인자 파싱."""
     parser = argparse.ArgumentParser(description="Value Momentum Scanner")
@@ -620,10 +628,13 @@ def output_results(top10: list):
         print(f"{'─'*65}")
         print(f"  {i:2}. {r['ticker']:<6}  {r['name'][:30]}")
         print(f"      현재가: {price:<10} | 52주저점: {low}")
-        print(f"      저평가 지수: {r['undervalue_score']:5.1f}/100  "
-              f"[밸류에이션 {r['breakdown']['valuation']:.0f}/25 | "
+        _max = _max_possible_score()
+        _tech_max = sum(W["technical"].values())
+        _val_max = 10 + W["valuation"].get("fcf_yield", 10) + W["valuation"].get("peg", 5)
+        print(f"      저평가 지수: {r['undervalue_score']:5.1f}/{_max:.0f}  "
+              f"[밸류에이션 {r['breakdown']['valuation']:.0f}/{_val_max:.0f} | "
               f"수익성 {r['breakdown']['profitability']:.0f}/20 | "
-              f"기술신호 {r['breakdown']['technical']:.0f}/55]")
+              f"기술신호 {r['breakdown']['technical']:.0f}/{_tech_max:.0f}]")
         pe_str = f"PE {pe:.0f}x(섹터중위수 {pe_med:.0f}x)" if pe and pe_med else f"PE {pe:.0f}x" if pe else "PE N/A"
         fcf_str = f"FCF {fcf:.1f}%" if fcf else "FCF N/A"
         roe_str = f"ROE {roe:.0f}%" if roe else "ROE N/A"
@@ -645,7 +656,7 @@ def output_results(top10: list):
             'name': r['name'],
             'sector': r['sector'],
             'current_price': r['current_price'],
-            'quant_score_70': round(r['undervalue_score'] * 0.7, 1),  # 100점 → 70점 리스케일
+            'quant_score_70': round(r['undervalue_score'] / _max_possible_score() * 70, 1),
             'key_signals': {
                 'rsi': tech.get('rsi', {}).get('value'),
                 'pct_from_52w_low': tech.get('52w_low', {}).get('pct_from_low'),
