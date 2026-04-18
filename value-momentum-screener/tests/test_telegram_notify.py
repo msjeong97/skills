@@ -178,3 +178,34 @@ def test_format_stock_message_no_risk_line_when_absent():
     stocks = parse_stock_sections(SAMPLE_MD)
     msg = format_stock_message(rows[1], stocks[1])
     assert "리스크" not in msg
+
+
+from unittest.mock import MagicMock, patch
+
+from telegram_notify import send_message
+
+
+# ── send_message ─────────────────────────────────────────────────────────────
+
+def test_send_message_posts_to_telegram_api():
+    mock_resp = MagicMock()
+    mock_resp.ok = True
+    with patch("telegram_notify.requests.post", return_value=mock_resp) as mock_post:
+        result = send_message("BOT_TOKEN", "CHAT_ID", "hello")
+    assert result is True
+    call_args = mock_post.call_args
+    assert "BOT_TOKEN" in call_args[0][0]
+    payload = call_args[1]["json"]
+    assert payload["chat_id"] == "CHAT_ID"
+    assert payload["text"] == "hello"
+    assert payload["parse_mode"] == "MarkdownV2"
+
+
+def test_send_message_returns_false_on_api_error():
+    mock_resp = MagicMock()
+    mock_resp.ok = False
+    mock_resp.status_code = 400
+    mock_resp.text = "Bad Request"
+    with patch("telegram_notify.requests.post", return_value=mock_resp):
+        result = send_message("TOKEN", "CHAT_ID", "hello")
+    assert result is False

@@ -136,3 +136,85 @@ def format_stock_message(summary: dict, detail: dict) -> str:
     if detail["risk"]:
         lines += ["", f"⚠️ {escape_md(detail['risk'])}"]
     return "\n".join(lines)
+
+
+# ── 전송 ──────────────────────────────────────────────────────────────────────
+
+def load_config() -> dict | None:
+    """telegram_config.json 로딩. 없으면 None 반환."""
+    if not CONFIG_PATH.exists():
+        print(f"[telegram] 설정 파일 없음: {CONFIG_PATH}", file=sys.stderr)
+        return None
+    return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+
+
+def send_message(bot_token: str, chat_id: str, text: str) -> bool:
+    """Telegram Bot API로 메시지 전송. 성공 시 True."""
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    resp = requests.post(
+        url,
+        json={"chat_id": chat_id, "text": text, "parse_mode": "MarkdownV2"},
+        timeout=10,
+    )
+    if not resp.ok:
+        print(f"[telegram] 전송 실패: {resp.status_code} {resp.text}", file=sys.stderr)
+        return False
+    return True
+
+
+def run(results_dir: Path, date_str: str) -> int:
+    """전체 파이프라인: config 로딩 → MD 파싱 → 메시지 전송."""
+    config = load_config()
+    if config is None:
+        return 0
+
+    md_path = results_dir / f"{date_str}.md"
+    if not md_path.exists():
+        print(f"[telegram] MD 파일 없음: {md_path}", file=sys.stderr)
+        return 0
+
+    md_text = md_path.read_text(encoding="utf-8")
+    summary_rows = parse_summary_table(md_text)
+    stock_details = parse_stock_sections(md_text)
+
+    if not summary_rows:
+        print("[telegram] 요약 테이블 파싱 실패", file=sys.stderr)
+        return 0
+
+    bot_token = config["bot_token"]
+    chat_id = config["chat_id"]
+
+    send_message(bot_token, chat_id, format_header_message(date_str, summary_rows))
+    time.sleep(0.5)
+
+    detail_by_rank = {d["rank"]: d for d in stock_details}
+    for row in summary_rows:
+        detail = detail_by_rank.get(row["rank"])
+        if detail is None:
+            continue
+        send_message(bot_token, chat_id, format_stock_message(row, detail))
+        time.sleep(0.5)
+
+    print(f"[telegram] 전송 완료: {len(summary_rows) + 1}개 메시지")
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Telegram notifier for screener results")
+    parser.add_argument(
+        "--date",
+        default=datetime.now().strftime("%Y-%m-%d"),
+        help="결과 날짜 (기본: 오늘, 형식: YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--results-dir",
+        type=Path,
+        default=ROOT / "results",
+        help="results 디렉토리 경로",
+    )
+    args = parser.parse_args()
+    sys.exit(run(args.results_dir, args.date))
+
+
+if __name__ == "__main__":
+    main()
