@@ -78,7 +78,7 @@ python {{SKILL_DIR}}/backtest_updater.py
 
 분석 결과를 아래 경로에 저장합니다:
 
-**저장 경로:** `{{SKILL_DIR}}/../../results/backtest-report-YYYY-MM-DD.md`
+**저장 경로:** `{{SKILL_DIR}}/../../results-backtesting/backtest-report-YYYY-MM-DD.md`
 
 ```markdown
 # Backtest Report — YYYY-MM-DD
@@ -96,5 +96,25 @@ python {{SKILL_DIR}}/backtest_updater.py
 
 저장 후 경로를 출력합니다:
 ```
-💾 백테스팅 리포트 저장됨: results/backtest-report-YYYY-MM-DD.md
+💾 백테스팅 리포트 저장됨: results-backtesting/backtest-report-YYYY-MM-DD.md
 ```
+
+---
+
+## Step 5: 스코어링 가중치 자동 업데이트
+
+```bash
+python {{SKILL_DIR}}/apply_weights.py
+```
+
+스크립트가 다음을 수행합니다:
+- `results-backtesting/analysis-*.json` (최신 파일) 기반으로 팩터별 수익률 차이 계산
+- 규칙 기반으로 `scoring_weights.json` 가중치 자동 조정:
+  - diff > +1.5%: +2점 상향
+  - diff > +0.5%: +1점 상향
+  - diff < -1.0%: -3점 하향
+  - diff < 0%: -1점 하향
+  - N < 20: 조정 없음 (샘플 부족)
+- 각 팩터별 최소/최대 제약 범위 내에서만 조정
+
+변경 내역을 출력하고 `scoring_weights.json`을 업데이트합니다. 다음 스캔부터 새 가중치가 자동 적용됩니다.
