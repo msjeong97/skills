@@ -52,8 +52,8 @@ def load_settings() -> dict:
 
 
 def paste_text(page, text: str):
-    """클립보드를 통해 텍스트 붙여넣기 (IME 깨짐 방지)."""
-    pyperclip.copy(text)
+    """브라우저 내부 clipboard API로 텍스트 붙여넣기 (headless 호환)."""
+    page.evaluate("async (t) => { await navigator.clipboard.writeText(t); }", text)
     page.keyboard.press("Meta+v")
     time.sleep(0.5)
 
@@ -319,6 +319,7 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         ctx = browser.new_context(viewport={"width": 1440, "height": 900})
+        ctx.grant_permissions(["clipboard-read", "clipboard-write"])
         ctx.add_cookies(cookies)
         page = ctx.new_page()
 
@@ -408,12 +409,17 @@ def main():
         else:
             print("최종 발행 중...")
             try:
-                # 도움말 패널 pointer-events 비활성화 (발행 버튼 클릭 가림 방지)
+                # 도움말 패널 CSS로 숨긴 뒤 일반 click()
                 page.evaluate("""() => {
-                    const c = document.querySelector('[class*="container__HW_tc"]');
-                    if (c) c.style.pointerEvents = 'none';
+                    document.querySelectorAll('[class*="HelpPanel"], [class*="help-panel"], .se-help-panel, [class*="helpPanel"]')
+                        .forEach(el => el.style.display = 'none');
+                    Array.from(document.querySelectorAll('[class*="panel"], [class*="Panel"]'))
+                        .filter(el => el.innerText && el.innerText.includes('도움말'))
+                        .forEach(el => el.style.display = 'none');
                 }""")
-                page.locator("[data-testid='seOnePublishBtn']").last.click(timeout=5000)
+                time.sleep(0.5)
+                page.locator("[data-testid='seOnePublishBtn']").click(timeout=8000)
+                print("  발행 버튼 클릭 완료")
                 try:
                     page.wait_for_url(re.compile(r"blog\.naver\.com/(PostView|[a-zA-Z0-9_]+/\d+)"), timeout=15000)
                     url = page.url
